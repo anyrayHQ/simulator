@@ -161,3 +161,20 @@ test('a wrong gateway URL fails in seconds, not after a minute of backoff', () =
   assert.ok(stderr.includes('first call failed'), stderr);
   assert.ok(stderr.includes('ANYRAY_GATEWAY_URL'), stderr);
 });
+
+test('a stand-down is reported as a reason, not as an empty 0%', async (t) => {
+  // A live gateway answered a toolless workload with status "skipped" and the
+  // reason "turn declared no callable tool …". Rendered as a bare 0% that reads
+  // as "Anyray does nothing for you", which is both wrong and the most
+  // expensive misreading this report can produce.
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const { stdout, results } = proveAgainst(url);
+  const row = results.summary.rows.find((r) => r.id === 'example-02-small-question');
+  assert.equal(row.savedPct, 0);
+  assert.equal(row.optimizeStatus, 'skipped');
+  assert.ok(row.optimizeNotes.some((n) => /stood down/.test(n)), JSON.stringify(row.optimizeNotes));
+  assert.ok(stdout.includes('Anyray stood down here'), stdout);
+  // And the suppression reason survives into results.json for the reader.
+  assert.ok(row.suppressed.some((s) => s.includes('no_retrieve')), JSON.stringify(row.suppressed));
+});

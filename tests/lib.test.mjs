@@ -160,3 +160,42 @@ test('judge: JSON is extracted from a chatty reply', () => {
     '{"winner":"A","why":"it names the {brace} error"}'
   );
 });
+
+test('usage: a cache WRITE is not added on top of an OpenAI-compatible total', () => {
+  // Both objects were captured from a live Bedrock-backed gateway: the same
+  // prompt, two consecutive runs, one writing the cache and one reading it.
+  // The prompt is 3231 tokens in both cases — the 2857 is a subset, not an
+  // addition. Adding it reported a 19% token INCREASE where there was no
+  // change at all.
+  const wrote = normalizeUsage({
+    prompt_tokens: 3231,
+    completion_tokens: 72,
+    prompt_tokens_details: { cached_tokens: 0 },
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 2857,
+  });
+  const read = normalizeUsage({
+    prompt_tokens: 3231,
+    completion_tokens: 65,
+    prompt_tokens_details: { cached_tokens: 2857 },
+    cache_read_input_tokens: 2857,
+    cache_creation_input_tokens: 0,
+  });
+  assert.equal(wrote.billedInput, 3231);
+  assert.equal(read.billedInput, 3231);
+  // Identical bytes, identical count — which is the property the whole repeats
+  // -disagree guard exists to police.
+  assert.equal(wrote.billedInput, read.billedInput);
+  assert.equal(wrote.cacheWrite, 2857);
+  assert.equal(read.cacheRead, 2857);
+});
+
+test('usage: Anthropic-native still SUMS, because input_tokens excludes cache', () => {
+  const u = normalizeUsage({
+    input_tokens: 374,
+    cache_creation_input_tokens: 2857,
+    cache_read_input_tokens: 0,
+    output_tokens: 40,
+  });
+  assert.equal(u.billedInput, 3231);
+});

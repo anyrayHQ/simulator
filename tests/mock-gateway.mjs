@@ -109,10 +109,34 @@ export function startMockGateway({ mode = 'healthy', port = 0 } = {}) {
       res.setHeader('content-type', 'application/json');
       // The gateway gates the optimization header behind x-anyray-test. Mirror
       // that here, or the client could stop sending it and no test would fail.
-      if (!bypassed && trimmable && req.headers['x-anyray-test']) {
+      if (!bypassed && req.headers['x-anyray-test']) {
+        // The real gateway's shape: an envelope with a status, decisions keyed
+        // by `kind`, and a `summary` that explains a stand-down. Captured from
+        // gateway.anyray.ai — a workload with no callable tool comes back
+        // "skipped" with a reason, NOT with an empty decision list.
         res.setHeader(
           'x-anyray-optimization',
-          JSON.stringify([{ strategy: 'context_compression' }, { strategy: 'relevance_filter' }])
+          JSON.stringify(
+            trimmable
+              ? {
+                  status: 'applied',
+                  decisions: [
+                    { kind: 'context_compression', summary: 'elided 40 routine log lines' },
+                    { kind: 'relevance_filter', summary: 'dropped 14 of 18 tools' },
+                  ],
+                }
+              : {
+                  status: 'skipped',
+                  decisions: [
+                    {
+                      kind: 'turn_shape',
+                      summary:
+                        'turn declared no callable tool, so pin-dependent strategies stood down',
+                    },
+                  ],
+                  suppressedKinds: [{ kind: 'relevance_filter', reason: 'no_retrieve' }],
+                }
+          )
         );
       }
       res.end(JSON.stringify(payload));

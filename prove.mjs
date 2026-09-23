@@ -45,6 +45,9 @@ async function runOnce(cfg, wl, optimize) {
       usage: normalizeUsage(r.usage),
       rawUsage: r.usage,
       strategies: r.strategies,
+      // Carries the gateway's status/summary/suppressed reasons, so a
+      // deliberate stand-down survives into the report as a reason.
+      optimization: r.optimization ?? null,
       finishReason: r.finishReason,
       latencyMs: r.latencyMs,
     };
