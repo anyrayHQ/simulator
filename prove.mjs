@@ -12,7 +12,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
-import { loadWorkloads } from './lib/workloads.mjs';
+import { loadWorkloads, stampRunId, newRunId } from './lib/workloads.mjs';
 import { callGateway } from './lib/gateway.mjs';
 import { normalizeUsage } from './lib/usage.mjs';
 import { loadRates } from './lib/rates.mjs';
@@ -25,6 +25,7 @@ function parseArgs(argv) {
     if (f === '--workload') a.only = argv[++i];
     else if (f === '--repeats') a.repeats = Number(argv[++i]);
     else if (f === '--dry-run') a.dryRun = true;
+    else if (f === '--no-cache-isolation') a.noCacheIsolation = true;
     else if (f === '--dir') a.dir = argv[++i];
     else if (f === '--out') a.out = argv[++i];
     else if (f === '--help' || f === '-h') a.help = true;
@@ -85,9 +86,19 @@ async function main() {
     `${workloads.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}. These are billed to you.\n`
   );
 
+  // One id per run, stamped into both arms, so a previous run's provider cache
+  // cannot flatter this one. See lib/workloads.mjs.
+  const runId = newRunId();
+  if (!args.noCacheIsolation) {
+    console.log(
+      `Cache isolation: this run stamps id ${runId} into every prompt, identically in both arms, so a previous run's provider cache cannot be mistaken for a saving. Disable with --no-cache-isolation.\n`
+    );
+  }
+
   const results = [];
   let firstCall = true;
-  for (const wl of workloads) {
+  for (const rawWl of workloads) {
+    const wl = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
     const bypassedRuns = [];
     const optimizedRuns = [];
     for (let i = 0; i < cfg.repeats; i++) {
@@ -127,7 +138,17 @@ async function main() {
   writeFileSync(
     args.out,
     JSON.stringify(
-      { ranAt: new Date().toISOString(), gatewayUrl: cfg.gatewayUrl, model: cfg.model, repeats: cfg.repeats, endpoint: cfg.endpoint, results, summary },
+      {
+        ranAt: new Date().toISOString(),
+        runId: args.noCacheIsolation ? null : runId,
+        cacheIsolation: !args.noCacheIsolation,
+        gatewayUrl: cfg.gatewayUrl,
+        model: cfg.model,
+        repeats: cfg.repeats,
+        endpoint: cfg.endpoint,
+        results,
+        summary,
+      },
       null,
       2
     ) + '\n'
