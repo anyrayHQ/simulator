@@ -247,13 +247,13 @@ export function renderReport(data) {
   } catch {
     /* a non-URL gateway string still prints fine as-is */
   }
-  return `<title>Proof run · ${esc(host)}</title>
+  return `<title>Anyray Simulator · ${esc(host)}</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>${STYLE}</style>
 <div class="wrap">
   <header class="masthead">
-    <span class="eyebrow">Anyray proof run</span>
+    <span class="eyebrow">Anyray simulator run</span>
     <h1>Two verdicts on your own prompts</h1>
     <dl class="slip">
       <div><dt>gateway</dt><dd>${esc(host)}</dd></div>

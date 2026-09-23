@@ -12,7 +12,7 @@ do that, after you've looked.
 
 ---
 
-You are setting up a proof run for the Anyray gateway. Work through these steps
+You are setting up a simulator run for the Anyray gateway. Work through these steps
 in order. Stop at the end of step 6 and report back; do not run `prove.mjs`.
 
 ## Step 1 — Configure
@@ -55,7 +55,7 @@ Both calls must return 200. If either fails:
 - **connection refused / DNS failure** — the URL is wrong, or the gateway isn't
   reachable from here.
 
-**Do not continue to step 3 until both calls return 200.** A proof run against a
+**Do not continue to step 3 until both calls return 200.** A simulator run against a
 gateway that isn't in the path measures nothing, and it will look like a result.
 
 ## Step 3 — Find their real prompts

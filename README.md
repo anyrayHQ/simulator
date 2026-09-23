@@ -1,5 +1,5 @@
 <p align="center">
-  <strong>Proof run</strong>
+  <strong>Anyray Simulator</strong>
 </p>
 
 <p align="center">
@@ -51,8 +51,8 @@ Same model, same key, same path. One header is the only difference.
 ## Quick start
 
 ```bash
-git clone https://github.com/anyrayHQ/proof-run.git
-cd proof-run
+git clone https://github.com/anyrayHQ/simulator.git
+cd simulator
 cp .env.example .env          # gateway URL, client key, model
 ```
 
@@ -133,7 +133,7 @@ Anthropic's `input_tokens` *excludes* cached reads, while an OpenAI-compatible
 headline by the size of the cache, in our favour. Both shapes are pinned by
 tests built from live payloads.
 
-**Each run is cache-isolated.** A provider's prompt cache outlives a proof run,
+**Each run is cache-isolated.** A provider's prompt cache outlives a simulator run,
 and it doesn't help both arms equally — Anyray adds the cache breakpoints, so
 the optimized body caches and the bypassed one doesn't. Run the proof twice
 inside the TTL and the second run's first call is already a hit. So every run
@@ -216,7 +216,7 @@ gateway your traffic already flows through.
 
 ## Why this isn't in the benchmarks repo
 
-| | [`benchmarks`](https://github.com/anyrayHQ/benchmarks) | `proof-run` |
+| | [`benchmarks`](https://github.com/anyrayHQ/benchmarks) | `anyray-simulator` |
 | --- | --- | --- |
 | Points at | the optimizer on `:8088` | your gateway |
 | Credential | admin token | a client key |

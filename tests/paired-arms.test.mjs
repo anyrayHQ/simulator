@@ -73,7 +73,7 @@ test('cache isolation stamps BOTH arms identically, so it cannot tilt the compar
   const stamped = stampRunId(wl, runId);
   // The id lands at the very START — a prefix cache is defeated by a changed
   // prefix and by nothing else.
-  assert.ok(stamped.body.messages[0].content.startsWith(`[anyray proof-run ${runId}`));
+  assert.ok(stamped.body.messages[0].content.startsWith(`[anyray-simulator ${runId}`));
   assert.ok(stamped.body.messages[0].content.includes('hello'));
   // The workload object is not mutated: both arms are built from the same
   // stamped body, so whatever it costs, it costs both equally.
@@ -113,8 +113,8 @@ test('the stamp lands where the CACHE looks, not merely where it is convenient',
   assert.equal(withTools.body.messages[0].content, 'hi');
 
   const withSystem = stampRunId({ id: 'w', body: { system: 'You are X.', messages: [{ role: 'user', content: 'hi' }] } }, 'abc12345');
-  assert.ok(withSystem.body.system.startsWith('[anyray proof-run abc12345'));
+  assert.ok(withSystem.body.system.startsWith('[anyray-simulator abc12345'));
 
   const bare = stampRunId({ id: 'w', body: { messages: [{ role: 'user', content: 'hi' }] } }, 'abc12345');
-  assert.ok(bare.body.messages[0].content.startsWith('[anyray proof-run abc12345'));
+  assert.ok(bare.body.messages[0].content.startsWith('[anyray-simulator abc12345'));
 });
