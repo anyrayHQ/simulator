@@ -1,8 +1,13 @@
 name: Secret scan (gitleaks)
 
 # This repo tells a customer's coding agent to write their real prompts into
-# workloads/. They are gitignored, but a scan on every push is the backstop for
-# the day someone force-adds one.
+# workloads/. They are gitignored, and this is the backstop for the day someone
+# force-adds one.
+#
+# Runs the gitleaks BINARY rather than gitleaks-action: the action requires a
+# paid licence for organization repositories and fails closed without one, which
+# is a secret scan that reports nothing while looking like it ran. Same approach
+# as anyrayHQ/benchmarks.
 
 on:
   pull_request: {}
@@ -19,13 +24,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  scan:
+  gitleaks:
+    name: gitleaks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.6
+
+      - name: Install gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tgz
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan for secrets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # --redact keeps any detected value out of the CI logs, which matters
+          # more here than usual: a hit is most likely a customer's own prompt.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            gitleaks git --no-banner --redact --config .gitleaks.toml \
+              --log-opts="--no-merges ${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          else
+            gitleaks git --no-banner --redact --config .gitleaks.toml
+          fi
