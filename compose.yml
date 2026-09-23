@@ -1,0 +1,32 @@
+# The Anyray optimizer, on your machine.
+#
+#   docker compose up -d
+#
+# This container is the only Anyray component involved in a proof run. It holds
+# the optimizer and its embedding model, listens on localhost, and has no
+# outbound network at all — see `network_mode` below. Your prompts go from this
+# machine to your own provider and nowhere else.
+
+services:
+  optimizer:
+    image: ghcr.io/anyrayhq/optimizer:${ANYRAY_OPTIMIZER_TAG:-latest}
+    ports:
+      # Bound to 127.0.0.1 on purpose: nothing outside this machine can reach
+      # the optimizer, so a prompt cannot leave by this route even by mistake.
+      - "127.0.0.1:8088:8088"
+    environment:
+      # No account, no licence check, no phone-home. If a future build needs
+      # one, it does not belong in this image — see README, "What it can't do".
+      ANYRAY_OPTIMIZER_MODE: standalone
+      # Warm the embedding model at startup rather than on first request, and
+      # hold /health at ready:false until it is resident. proof-run refuses to
+      # measure before then, because a cold optimizer silently falls back to
+      # lexical ranking and measures a different pipeline.
+      ANYRAY_WARM_ON_START: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8088/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    restart: unless-stopped

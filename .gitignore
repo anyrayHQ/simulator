@@ -2,7 +2,7 @@
 node_modules/
 npm-debug.log*
 
-# Gateway URL and client key.
+# Your provider key.
 .env
 
 # YOUR WORKLOADS ARE YOURS. Everything the setup prompt writes into workloads/

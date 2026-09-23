@@ -1,16 +1,25 @@
 # Proof run
 
-Point this at your own Anyray gateway, give it your own prompts, and run one
-command. It sends each prompt twice — once with Anyray bypassed, once the normal
-way — and answers two questions with numbers you can check:
+Run Anyray on your own prompts, on your own machine, without signing anything.
+
+One container and one command. It sends each of your prompts twice to your own
+provider with your own key — once as you wrote it, once after the local
+optimizer has trimmed it — and answers two questions with numbers you can
+check:
 
 1. **Does it cost less?** Input tokens, taken from your provider's own `usage`
    field on both runs.
 2. **Are the answers still right?** Checked against facts *you* declared a
    correct answer has to carry.
 
-Neither number is ours to adjust. Same model, same key, same path — one header
-is the only difference between the two runs.
+Neither number is ours to adjust. Same model, same key, same provider — the
+only difference between the two runs is whether the local container trimmed the
+prompt first.
+
+**No account. No Anyray key. No prompt ever reaches us.** The optimizer is a
+container bound to `127.0.0.1`. The only request that leaves your machine is the
+one to your own provider — the same call your application already makes. Point
+`PROVIDER_BASE_URL` at a model you host yourself and nothing leaves at all.
 
 ---
 
@@ -27,7 +36,7 @@ session-level verdict.
 
 | Question | Does this repo answer it? |
 |---|---|
-| Is Anyray actually in my request path? | **Yes** — setup fails loudly if it isn't |
+| Does Anyray actually change my prompts? | **Yes** — and the report names which strategies fired |
 | How many tokens does it take out of my prompts? | **Yes** — exactly, from the provider's count |
 | What does that save me in dollars? | **Yes** — at published list rates |
 | Do the answers still contain what I need? | **Yes** — facts you declared, checked on every run |
@@ -40,25 +49,31 @@ session-level verdict.
 
 ```
 1. Clone this repo             public, no account
-2. Paste SETUP-PROMPT.md       into your coding agent
-3. It captures your workloads  your prompts + the facts that matter
-4. node prove.mjs              the proof run
+2. docker compose up -d        the optimizer, on your machine
+3. cp .env.example .env        your provider URL and your own key
+4. node prove.mjs              runs the three shipped examples
 5. node report.mjs             open report.html
 ```
 
-Steps 2 and 3 are the point: your own coding agent does the setup and the
-capture, so there's no wizard to babysit and **you** picked the workloads.
+That's about two minutes and it gives you a real report — on our example
+prompts, run against your provider. **Then** make it yours: paste
+`SETUP-PROMPT.md` into your coding agent and it captures ten of your own
+prompts, works out the facts each answer has to carry, and stops for your
+review. Same command afterwards.
 
 ```sh
 git clone https://github.com/anyrayHQ/proof-run.git
 cd proof-run
-cp .env.example .env          # gateway URL, client key, model, repeats
-# paste SETUP-PROMPT.md into Claude Code / Cursor / your agent of choice
-node prove.mjs
+docker compose up -d
+cp .env.example .env                   # provider URL + your own provider key
+node prove.mjs --workload example-02   # 6 calls: does the plumbing work?
+node prove.mjs                         # the full run
 node report.mjs && open report.html
 ```
 
-Requires Node 20+. No dependencies, no `npm install`, no account.
+Requires Node 20+ and Docker. No dependencies, no `npm install`, no account.
+Check the plumbing with one cheap workload before spending a full run — that's
+what the `--workload` line above is for.
 
 ### What it costs you
 
@@ -118,11 +133,11 @@ When a trim does break something, the run names what was lost and exits non-zero
 
 ```
 example-01-log-dump    9,036 → 2,892   68%  LOST FACTS (2/3 vs 3/3)
-  ! only missing with Anyray on: ECONNRESET
+  ! only missing after the trim: ECONNRESET
 ```
 
 That path is tested, not assumed — `tests/end-to-end.test.mjs` runs the whole
-thing against a mock gateway in both states, and the regression case is what
+thing against a mock optimizer in both states, and the regression case is what
 shows the quality check is load-bearing rather than decorative.
 
 ### An optional second opinion
@@ -142,13 +157,15 @@ workloads graded by one model is a small sample, and the report says so.
 
 | | |
 |---|---|
-| `SETUP-PROMPT.md` | Paste into your coding agent. It does steps 2 and 3. |
+| `compose.yml` | The optimizer container. Bound to localhost, no outbound network. |
+| `OPTIMIZER-CONTAINER.md` | What the container has to do. The contract, and what it must never do. |
+| `SETUP-PROMPT.md` | Paste into your coding agent to capture your own prompts. |
 | `prove.mjs` | Both arms, both verdicts. The one command. |
 | `judge.mjs` | Optional blind grading. |
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
 | `workloads/` | Three worked examples. Yours land here and are **gitignored**. |
-| `.env.example` | Gateway, key, model, repeats. |
+| `.env.example` | Your provider URL, your provider key, model, repeats. |
 
 One of the three examples (`example-02-small-question`) saves nothing at all.
 It's there on purpose: a short question has nothing worth removing, and you
@@ -157,10 +174,33 @@ numbers.
 
 ### Your prompts stay yours
 
+Two destinations, and you can verify both:
+
+| Where a prompt goes | What it is |
+|---|---|
+| `localhost:8088` | The optimizer container, on your machine, bound to `127.0.0.1` |
+| `PROVIDER_BASE_URL` | Your provider, with your key — the call your app already makes |
+
+That's the complete list. There is no third, and the test suite asserts it
+(`the run never sends a prompt anywhere but the provider and the local
+optimizer`). If you want to be sure rather than take our word for it, run the
+container with `--network none`: it has no reason to reach anything, and if a
+future build breaks that, it should break loudly here.
+
 Everything the setup prompt writes into `workloads/` is your own traffic, and
 `.gitignore` keeps all of it — plus `results.json` and `report.html`, which hold
-both models' answers — out of git. Nothing leaves your machine except the
-requests you were going to send to your own gateway anyway.
+both models' answers — out of git.
+
+### What it can't do
+
+- **It doesn't prove your bill goes down.** See the caveat above: per request,
+  not per session.
+- **It doesn't run without your provider.** Measuring real token counts means
+  really calling a model. The calls are on your bill and the run says so before
+  it starts.
+- **It isn't a benchmark of us against ourselves.** The container ships the
+  default pipeline, not a tuned one. That's deliberate — it's what you'd get on
+  a default install.
 
 ---
 
@@ -168,8 +208,9 @@ requests you were going to send to your own gateway anyway.
 
 | | [`benchmarks`](https://github.com/anyrayHQ/benchmarks) | `proof-run` |
 |---|---|---|
-| Points at | the optimizer on `:8088` | your gateway |
-| Credential | admin token | a client key |
+| Points at | the optimizer on `:8088` | the optimizer on `:8088`, on *your* machine |
+| Credential | admin token | your own provider key |
+| Pipeline | one strategy pinned per workload | the default pipeline, unchanged |
 | Payloads | synthetic, committed | yours, never committed |
 | Token counts | tokenizer estimate | provider's `usage` field |
 | Calls a provider | no | yes, on your bill |
@@ -185,16 +226,23 @@ your own traffic? You're in the right place.
 
 ## Troubleshooting
 
-**`missing ANYRAY_GATEWAY_URL` / `missing ANYRAY_API_KEY`** — copy
+**`missing PROVIDER_BASE_URL` / `missing PROVIDER_API_KEY`** — copy
 `.env.example` to `.env` and fill it in.
 
-**`gateway 401` or `gateway 402`** — the key isn't valid for that gateway, or
-enrollment lapsed. `anyray-connect doctor --json` reports which.
+**`the optimizer … did not become ready`** — the container is still loading its
+embedding model, or isn't up. `docker compose up -d`, then `docker compose logs
+optimizer`. The run refuses to measure until it's ready, because a cold
+optimizer quietly measures a different pipeline.
 
-**Both arms report identical token counts on every workload** — the bypass
-header isn't reaching the optimizer, so you're measuring the same path twice.
-Check that the URL is your Anyray gateway and not the provider directly.
+**`provider 401`** — the key is wrong for this provider, or the dialect is.
+Anthropic wants `x-api-key`; everything OpenAI-compatible wants
+`Authorization: Bearer`. The error names which one the run used; override with
+`PROVIDER_DIALECT`.
+
+**Both arms report identical token counts on every workload** — the optimizer
+isn't changing anything. Check `docker compose logs optimizer`, and check the
+"Strategies" column in the report: if it's empty everywhere, nothing fired.
 
 **`repeats disagree on input tokens`** — something varied between two runs of
 the *same* arm that shouldn't have: a system prompt with a timestamp in it, or a
-non-deterministic gateway. Worth chasing before you trust the delta.
+non-deterministic provider. Worth chasing before you trust the delta.
