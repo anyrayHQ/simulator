@@ -143,8 +143,17 @@ test('env: .env parses, and the real environment wins', () => {
 
 test('env: a missing key fails loudly rather than calling an open endpoint', () => {
   assert.throws(() => resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw' }), /ANYRAY_API_KEY/);
-  assert.throws(() => resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw', ANYRAY_API_KEY: 'k', PROOF_REPEATS: '0' }), /positive integer/);
-  const cfg = resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw/', ANYRAY_API_KEY: 'k' });
+  assert.throws(
+    () => resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw', ANYRAY_API_KEY: 'k', PROOF_MODEL: 'm', PROOF_REPEATS: '0' }),
+    /positive integer/
+  );
+  // PROOF_MODEL has no default on purpose: a shipped one fails on the first
+  // call against any deployment that does not route it.
+  assert.throws(
+    () => resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw', ANYRAY_API_KEY: 'k' }),
+    /PROOF_MODEL/
+  );
+  const cfg = resolveConfig({ ANYRAY_GATEWAY_URL: 'https://gw/', ANYRAY_API_KEY: 'k', PROOF_MODEL: 'm' });
   assert.equal(cfg.gatewayUrl, 'https://gw');
   assert.equal(cfg.repeats, 3);
 });
@@ -198,4 +207,27 @@ test('usage: Anthropic-native still SUMS, because input_tokens excludes cache', 
     output_tokens: 40,
   });
   assert.equal(u.billedInput, 3231);
+});
+
+test('the first failed call names the real problem, not a guess', async () => {
+  // Found by running the README's own quick start from a clean clone: the
+  // shipped PROOF_MODEL was not served by the gateway, and the error told the
+  // user to go check their API key.
+  const { firstCallHint } = await import('../prove.mjs');
+  const cfg = { model: 'claude-sonnet-5', gatewayUrl: 'https://gw.example.com' };
+
+  const model = firstCallHint('gateway 404: {"error":{"message":"The model `claude-sonnet-5` does not exist."}}', cfg);
+  assert.match(model, /PROOF_MODEL is "claude-sonnet-5"/);
+  assert.ok(!/API_KEY/.test(model), 'a 404 about the model must not send them to check the key');
+
+  const auth = firstCallHint('gateway 401: valid client key required', cfg);
+  assert.match(auth, /ANYRAY_API_KEY/);
+  assert.match(auth, /anyray-connect doctor/);
+
+  const entitlement = firstCallHint('gateway 402: payment required', cfg);
+  assert.match(entitlement, /entitlement lease/);
+  assert.ok(/Nothing in \.env fixes that/.test(entitlement), 'must not imply the user can fix it');
+
+  const net = firstCallHint('fetch failed (connect ECONNREFUSED 127.0.0.1:45999)', cfg);
+  assert.match(net, /Nothing answered at/);
 });

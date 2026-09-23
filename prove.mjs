@@ -35,6 +35,39 @@ function parseArgs(argv) {
 
 const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--dir workloads]`;
 
+/**
+ * Name the ACTUAL problem on the first failed call.
+ *
+ * This is the first command a new user runs, and a wrong guess sends them to
+ * check a credential that was never the issue. Caught by following the README's
+ * own quick start from a clean clone: the shipped PROOF_MODEL was not a model
+ * that gateway serves, and the hint said "a 401 or 402 usually means the key is
+ * not valid" underneath a 404 about the model.
+ */
+export function firstCallHint(error, cfg) {
+  const msg = String(error);
+  if (/\b404\b/.test(msg) || /does not exist|model.*not found|unknown model/i.test(msg)) {
+    return (
+      `PROOF_MODEL is "${cfg.model}", and this gateway does not serve it.\n` +
+      `Set PROOF_MODEL in .env to a model your deployment actually routes — the one your app already sends is the right choice, ` +
+      `since the dollar figure depends on its rate. Your Anyray console lists what this gateway serves.`
+    );
+  }
+  if (/\b401\b|\b403\b/.test(msg)) {
+    return (
+      `That is an auth failure: ANYRAY_API_KEY is not valid for ${cfg.gatewayUrl}, or it was minted for a different deployment.\n` +
+      `\`anyray-connect doctor --json\` reports which. Use a client key (ark_...), not an admin token.`
+    );
+  }
+  if (/\b402\b/.test(msg)) {
+    return `That is 402 Payment Required: the deployment holds no entitlement lease, so it will not serve /v1/* at all. Nothing in .env fixes that — talk to whoever runs the gateway.`;
+  }
+  if (/ECONNREFUSED|ENOTFOUND|fetch failed/i.test(msg)) {
+    return `Nothing answered at ANYRAY_GATEWAY_URL (${cfg.gatewayUrl}). Check the host, and that you can reach it from here.`;
+  }
+  return `Check ANYRAY_GATEWAY_URL (${cfg.gatewayUrl}) and ANYRAY_API_KEY in .env.`;
+}
+
 /** One arm of one repeat. Failures are recorded, not thrown: one 400 on one
  *  workload should not throw away the rest of a run you are paying for. */
 async function runOnce(cfg, wl, optimize) {
@@ -113,10 +146,7 @@ async function main() {
         // same failure another fifty times.
         if (firstCall && run.error) {
           throw new Error(
-            `first call failed, so nothing was measured:\n  ${run.error}\n\n` +
-              `Check ANYRAY_GATEWAY_URL (${cfg.gatewayUrl}) and ANYRAY_API_KEY in .env. ` +
-              `A 401 or 402 usually means the key is not valid for this gateway — ` +
-              `\`anyray-connect doctor --json\` reports which.`
+            `first call failed, so nothing was measured:\n  ${run.error}\n\n${firstCallHint(run.error, cfg)}`
           );
         }
         firstCall = false;
@@ -162,7 +192,13 @@ async function main() {
   if (summary.quality.regressions.length) process.exit(2);
 }
 
-main().catch((e) => {
-  console.error(e.message ?? e);
-  process.exit(1);
-});
+// Only run when invoked directly. judge.mjs and report.mjs already guard this;
+// prove.mjs did not, so importing it to unit-test a helper started a real proof
+// run against whatever .env happened to be present — 18 billed calls from a
+// test file. Found when a test imported firstCallHint.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((e) => {
+    console.error(e.message ?? e);
+    process.exit(1);
+  });
+}

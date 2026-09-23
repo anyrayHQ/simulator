@@ -56,6 +56,11 @@ cd simulator
 cp .env.example .env          # gateway URL, client key, model
 ```
 
+Three values, and **`PROOF_MODEL` has no default** — set it to a model your
+gateway actually routes, ideally the one your app already sends. Every
+deployment serves a different set, so a shipped default would just fail on your
+first call.
+
 Check the plumbing first — one cheap workload, six calls:
 
 ```bash

@@ -159,6 +159,7 @@ test('a wrong gateway URL fails in seconds, not after a minute of backoff', () =
   const elapsed = Date.now() - started;
   assert.ok(elapsed < 15000, `took ${elapsed}ms — a refused connection should not be retried`);
   assert.ok(stderr.includes('first call failed'), stderr);
+  assert.ok(stderr.includes('Nothing answered at'), stderr);
   assert.ok(stderr.includes('ANYRAY_GATEWAY_URL'), stderr);
 });
 
