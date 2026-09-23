@@ -183,6 +183,25 @@ workloads graded by one model is a small sample, and the report says so.
 
 </details>
 
+## Does it work on models other than Claude?
+
+Yes. Nothing in the measurement is Claude-specific — it reads whichever dialect
+your gateway speaks, `/v1/chat/completions` or `/v1/messages`, and takes the
+token counts from whatever `usage` the provider returns. If your gateway routes
+it, this measures it.
+
+Two things to know:
+
+- **`PROOF_MODEL` must be a model your gateway actually serves.** There is no
+  default, and a model it does not route fails on the first call with a message
+  saying so.
+- **`rates.json` prices the published catalogue** — Claude, GPT, Gemini, Grok,
+  Kimi, GLM, and the open-weight models. A model that is not in it reports
+  **tokens only** rather than a guessed dollar figure, because an invented rate
+  under a number whose whole value is being checkable is worse than an honest
+  gap. Add yours to `rates.json` if it is missing; the percentage saved does not
+  depend on it.
+
 ## What it answers
 
 | Question | Does this repo answer it? |

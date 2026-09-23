@@ -291,3 +291,47 @@ test('a truncated answer is never reported as a lost fact', async () => {
   assert.equal(real.truncated, false);
   assert.equal(real.regression, true);
 });
+
+test('usage parses the shapes other providers actually return', () => {
+  // The tool is dialect-based, not model-based, so any provider the gateway
+  // fronts should work — but only if its usage shape is read correctly. These
+  // are the shapes in the wild, not invented ones.
+
+  // OpenAI: prompt_tokens is the TOTAL and nests its cached count.
+  const openai = normalizeUsage({
+    prompt_tokens: 5000,
+    completion_tokens: 100,
+    prompt_tokens_details: { cached_tokens: 4000 },
+  });
+  assert.equal(openai.billedInput, 5000);
+  assert.equal(openai.cacheRead, 4000);
+  assert.equal(openai.uncachedInput, 1000);
+
+  // Gemini / OpenAI-compatible proxies that report no cache block at all.
+  const plain = normalizeUsage({ prompt_tokens: 812, completion_tokens: 44 });
+  assert.equal(plain.billedInput, 812);
+  assert.equal(plain.cacheRead, 0);
+
+  // An endpoint that reports nothing usable must yield zeros, not NaN — a NaN
+  // would propagate into the headline as "NaN% lower".
+  const empty = normalizeUsage({});
+  assert.equal(empty.billedInput, 0);
+  assert.ok(Number.isFinite(empty.billedInput));
+  const junk = normalizeUsage({ prompt_tokens: 'many', completion_tokens: null });
+  assert.equal(junk.billedInput, 0);
+  assert.ok(Number.isFinite(junk.billedInput));
+});
+
+test('rates cover the non-Claude models the gateway can route to', async () => {
+  // A customer proving this on GPT or Gemini should get a dollar figure, not
+  // "tokens only" — the percentage is the headline, but the money is what
+  // gets forwarded to whoever asked.
+  const { loadRates, rateFor } = await import('../lib/rates.mjs');
+  const r = loadRates('rates.json');
+  for (const m of ['gpt-5', 'gpt-4o', 'o4-mini', 'gemini-2.5-pro', 'claude-sonnet-4-5']) {
+    assert.ok(rateFor(r, m), `${m} has no published rate in rates.json`);
+  }
+  // And an id nobody published still reports nothing rather than a neighbour's
+  // rate — over-pricing over-states the saving.
+  assert.equal(rateFor(r, 'totally-made-up-7b'), null);
+});
