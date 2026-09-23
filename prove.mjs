@@ -25,6 +25,7 @@ function parseArgs(argv) {
     if (f === '--workload') a.only = argv[++i];
     else if (f === '--repeats') a.repeats = Number(argv[++i]);
     else if (f === '--dry-run') a.dryRun = true;
+    else if (f === '--examples') a.examples = true;
     else if (f === '--no-cache-isolation') a.noCacheIsolation = true;
     else if (f === '--dir') a.dir = argv[++i];
     else if (f === '--out') a.out = argv[++i];
@@ -33,7 +34,7 @@ function parseArgs(argv) {
   return a;
 }
 
-const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--dir workloads]`;
+const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--examples] [--dir workloads]`;
 
 /**
  * Name the ACTUAL problem on the first failed call.
@@ -98,13 +99,22 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
 
-  const { workloads, problems } = loadWorkloads(args.dir, { only: args.only });
+  const { workloads, problems, examplesSkipped } = loadWorkloads(args.dir, {
+    only: args.only,
+    examples: args.examples,
+  });
   for (const p of problems) console.error(`workload problem — ${p}`);
   if (!workloads.length) {
     console.error(
       `\nNo usable workloads in ${args.dir}/. Paste SETUP-PROMPT.md into your coding agent to capture some.`
     );
     process.exit(1);
+  }
+
+  if (examplesSkipped) {
+    console.log(
+      `Running your ${workloads.length} captured workload(s). The ${examplesSkipped} shipped example(s) are skipped now that you have your own — they are our fixtures, and you would be paying for them. Use --examples to include them.\n`
+    );
   }
 
   if (args.dryRun) {

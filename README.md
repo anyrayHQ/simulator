@@ -226,7 +226,7 @@ this tool does **not** protect you from.
 | `judge.mjs` | Optional blind grading. |
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
-| `workloads/` | Three worked examples. Yours land here, gitignored. |
+| `workloads/` | Four worked examples. Yours land here, gitignored — and once any of yours exist, the examples are skipped (`--examples` forces them back). |
 
 ## Troubleshooting
 

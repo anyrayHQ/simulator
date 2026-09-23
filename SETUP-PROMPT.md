@@ -182,7 +182,9 @@ Rules:
 - Include `tools` in `body` if the real request carries them — a tool catalogue
   is often most of the prompt.
 - Name the files `01-`…`10-`. Anything matching `example-*` is a shipped
-  example, so don't overwrite those.
+  example, so don't overwrite those — and once at least one workload of theirs
+  exists, `prove.mjs` skips the examples automatically. They are our fixtures;
+  the customer should not be paying to re-measure them.
 
 ## Step 5 — Work out the required facts
 

@@ -238,3 +238,24 @@ test('the first failed call names the real problem, not a guess', async () => {
   const net = firstCallHint('fetch failed (connect ECONNREFUSED 127.0.0.1:45999)', cfg);
   assert.match(net, /Nothing answered at/);
 });
+
+test('shipped examples step aside once the customer has their own', async () => {
+  // Running SETUP-PROMPT.md end to end put two captured workloads in a run of
+  // six: two thirds of the report was our synthetic fixtures, and 24 of 36
+  // billed calls bought the customer nothing.
+  const { partitionExamples } = await import('../lib/workloads.mjs');
+  const all = [
+    { id: 'example-01-log-dump' },
+    { id: 'example-02-small-question' },
+    { id: '01-incident-triage' },
+    { id: '02-pr-review' },
+  ];
+  const { captured, examples } = partitionExamples(all);
+  assert.deepEqual(captured.map((w) => w.id), ['01-incident-triage', '02-pr-review']);
+  assert.equal(examples.length, 2);
+  // With nothing captured, the examples ARE the run — otherwise a fresh clone
+  // would have nothing to demonstrate.
+  const fresh = partitionExamples([{ id: 'example-01-log-dump' }]);
+  assert.equal(fresh.captured.length, 0);
+  assert.equal(fresh.examples.length, 1);
+});
