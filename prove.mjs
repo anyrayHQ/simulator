@@ -153,7 +153,10 @@ async function main() {
       2
     ) + '\n'
   );
-  console.log(`\nWrote ${args.out}. Run \`node report.mjs\` for the readable version.`);
+  console.log(
+    `\nWrote ${args.out}. Run \`node report.mjs\` for the readable version, or ` +
+      `\`node report.mjs --redact\` for a copy you can send on with the prompts and answers removed.`
+  );
 
   // A lost fact is a failing proof, and CI should be able to see that.
   if (summary.quality.regressions.length) process.exit(2);

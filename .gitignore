@@ -14,6 +14,7 @@ workloads/*
 # Run outputs: they contain your prompts AND both models' answers.
 results.json
 report.html
+report-shareable.html
 judge.json
 
 # macOS

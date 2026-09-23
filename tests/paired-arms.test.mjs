@@ -151,3 +151,73 @@ test('report.html loads nothing from a third party', async () => {
   assert.ok(!/<link[^>]+href\s*=\s*"https?:/i.test(html), 'report <link>s to an external stylesheet');
   assert.ok(!/fonts\.(googleapis|gstatic)\.com/i.test(html), 'report still references Google Fonts');
 });
+
+test('--redact removes every verbatim string from the customer, and says what it kept', async () => {
+  // The reason anyone runs this is that somebody ELSE asked whether the savings
+  // are real, so the report has to travel. The full one carries production
+  // prompts and both answers; this asserts the shareable one carries neither,
+  // on the hardest case — a regression, where fact names are what the report is
+  // otherwise shouting about.
+  const { renderReport } = await import('../report.mjs');
+  const SECRET = ['ECONNRESET', 'payments-api', 'ord_88412', 'ACME-INTERNAL-HOSTNAME'];
+  const data = {
+    ranAt: '2026-09-23T00:00:00.000Z',
+    gatewayUrl: 'https://gw.example.com',
+    model: 'claude-sonnet-4-5',
+    endpoint: '/v1/chat/completions',
+    repeats: 3,
+    summary: {
+      model: 'claude-sonnet-4-5',
+      repeats: 3,
+      rows: [
+        {
+          id: 'example-01-log-dump',
+          title: 'ACME-INTERNAL-HOSTNAME incident',
+          bypassed: { billedInput: 9036, cacheRead: 0, cacheWrite: 0, uncachedInput: 9036, output: 50 },
+          optimized: { billedInput: 2892, cacheRead: 0, cacheWrite: 0, uncachedInput: 2892, output: 50 },
+          savedPct: 68,
+          facts: {
+            total: 3, bypassedKept: 3, optimizedKept: 1,
+            lost: ['ECONNRESET', 'payments-api'], missingBoth: [], recovered: [],
+            regression: true, inconclusive: false,
+          },
+          strategies: ['context_compression'],
+          optimizeStatus: 'applied', optimizeNotes: [], suppressed: [],
+          inconsistent: { bypassed: null, optimized: null },
+          errors: [],
+          answers: {
+            bypassed: 'The failure was ECONNRESET on payments-api for ord_88412.',
+            optimized: 'Something went wrong with ord_88412.',
+          },
+        },
+      ],
+      cost: { before: 9036, after: 2892, savedPct: 68, priced: false, cacheState: 'none', usdSavedPct: 0, notMeasured: 0 },
+      quality: { checked: 1, clean: 0, regressions: [], inconclusive: [] },
+      errors: [],
+    },
+  };
+  data.summary.quality.regressions = [data.summary.rows[0]];
+
+  const shareable = renderReport(data, { redact: true });
+  for (const secret of SECRET) {
+    assert.ok(!shareable.includes(secret), `shareable report leaked "${secret}"`);
+  }
+  // No answers section at all.
+  assert.ok(!shareable.includes('Both answers'), 'shareable report still renders answers');
+  assert.ok(!shareable.includes('Something went wrong'), 'shareable report leaked an answer');
+
+  // But the numbers a reader actually needs survive.
+  assert.ok(shareable.includes('9,036') && shareable.includes('2,892'), 'lost the token counts');
+  assert.ok(/68%/.test(shareable), 'lost the saving');
+  assert.ok(/lost a fact/i.test(shareable), 'a regression must still read as a regression');
+  assert.ok(/2 of 3 required fact/.test(shareable), 'lost the fact count');
+  assert.ok(shareable.includes('context_compression'), 'lost which strategies fired');
+
+  // And it must disclose what it still carries rather than imply it is clean.
+  assert.ok(/check before you send it/i.test(shareable), 'no disclosure of what remains');
+
+  // The full report is unchanged: it is the one that keeps everything.
+  const full = renderReport(data);
+  for (const secret of ['ECONNRESET', 'payments-api']) assert.ok(full.includes(secret));
+  assert.ok(full.includes('Both answers'));
+});

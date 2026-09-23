@@ -36,7 +36,7 @@ Include where you can:
 | | |
 | --- | --- |
 | **Your client key** | Read from `.env`, sent as a bearer token to the gateway URL you configured. Nowhere else. |
-| **Your prompts** | Read from `workloads/`, sent to your gateway. Written back into `results.json` and `report.html` along with both answers. |
+| **Your prompts** | Read from `workloads/`, sent to your gateway. Written back into `results.json` and `report.html` along with both answers. `report-shareable.html` (`--redact`) carries neither. |
 | **Your provider bill** | Every run makes 2 × `PROOF_REPEATS` real calls per workload. |
 | **Nothing else** | No telemetry, no phone-home, no analytics. There are no runtime dependencies, so there is no third-party code in the request path. |
 
@@ -84,7 +84,10 @@ should point at production data.
 - **The optional judge sends both answers to your model.** `judge.mjs` is
   opt-in; if your answers are sensitive, do not run it.
 - **`report.html` is a local file, not a private one.** Nothing stops it being
-  emailed onward. It holds your prompts and both answers.
+  emailed onward, and it holds your prompts and both answers. If it needs to
+  travel, `node report.mjs --redact` writes a copy with the content removed —
+  though your workload ids, gateway host and model name remain, and the file
+  says so rather than implying it is fully sanitised.
 
 ## Supported versions
 

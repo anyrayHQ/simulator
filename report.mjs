@@ -3,8 +3,16 @@
 // which strategies fired, and both answers side by side.
 //
 //   node prove.mjs && node report.mjs
+//   node report.mjs --redact          -> report-shareable.html
 //
-// report.html is gitignored — it contains your prompts and the model's answers.
+// The full report holds your prompts and both models' answers, so it is
+// gitignored and meant to stay on this machine. But the reason anyone runs this
+// is usually that someone ELSE asked whether the savings are real, and emailing
+// them a file full of production prompts is a poor way to answer. --redact
+// writes the same numbers with the content removed: no prompts, no answers, and
+// no required-fact strings, since a fact is a verbatim value out of the
+// customer's own data. What stays is listed in the file's own banner, because
+// the sender should be told what they are forwarding rather than reassured.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fmtUSD } from './lib/rates.mjs';
@@ -95,6 +103,7 @@ code, .mono, td.num, th.num { font-family: ui-monospace, SFMono-Regular, "SF Mon
 .slip dt { color: var(--ink-soft); }
 .slip dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
+.caveat.redacted { border-left-color: var(--warn); background: var(--warn-wash); padding: 1rem 0 1rem 1.1rem; }
 .caveat { border-left: 3px solid var(--accent); padding: 0.1rem 0 0.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .caveat strong { font-weight: 600; }
 
@@ -159,7 +168,7 @@ function costPanel(s) {
   </section>`;
 }
 
-function qualityPanel(s) {
+function qualityPanel(s, redact) {
   const q = s.quality;
   if (q.regressions.length) {
     return `<section class="verdict fail">
@@ -167,7 +176,11 @@ function qualityPanel(s) {
       <p class="headline fail-text">${q.regressions.length} of ${q.checked}<br>lost a fact</p>
       <p class="basis">These workloads carried the required fact <strong>without</strong> Anyray and stopped carrying it <strong>with</strong> Anyray:</p>
       <ul class="basis">${q.regressions
-        .map((r) => `<li><code>${esc(r.id)}</code> — ${esc(r.facts.lost.join(', '))}</li>`)
+        .map((r) =>
+          redact
+            ? `<li><code>${esc(r.id)}</code> — ${r.facts.lost.length} of ${r.facts.total} required fact(s)</li>`
+            : `<li><code>${esc(r.id)}</code> — ${esc(r.facts.lost.join(', '))}</li>`
+        )
         .join('')}</ul>
     </section>`;
   }
@@ -187,18 +200,28 @@ function qualityPanel(s) {
   </section>`;
 }
 
-function tableRows(rows) {
+function tableRows(rows, redact) {
   return rows
     .map((r) => {
       if (!r.bypassed || !r.optimized) {
         return `<tr><td><code>${esc(r.id)}</code></td><td colspan="5" class="flag">${esc(r.errors[0] ?? 'no successful runs')}</td></tr>`;
       }
       const flags = [];
+      // A required fact is a verbatim string out of the customer's own data —
+      // an order id, a service name. In a shareable report it becomes a count.
       if (r.facts.regression) {
-        flags.push(`<span class="flag">only missing with Anyray on: ${esc(r.facts.lost.join(', '))}</span>`);
+        flags.push(
+          redact
+            ? `<span class="flag">${r.facts.lost.length} required fact(s) lost after the trim</span>`
+            : `<span class="flag">only missing after the trim: ${esc(r.facts.lost.join(', '))}</span>`
+        );
       }
       if (r.facts.inconclusive && !r.facts.regression) {
-        flags.push(`<span class="flag mild">missing from both answers, so not counted: ${esc(r.facts.missingBoth.join(', '))}</span>`);
+        flags.push(
+          redact
+            ? `<span class="flag mild">${r.facts.missingBoth.length} fact(s) missing from both answers, so not counted</span>`
+            : `<span class="flag mild">missing from both answers, so not counted: ${esc(r.facts.missingBoth.join(', '))}</span>`
+        );
       }
       for (const arm of ['bypassed', 'optimized']) {
         if (r.inconsistent[arm]) {
@@ -239,7 +262,7 @@ function answerBlocks(rows) {
     .join('\n');
 }
 
-export function renderReport(data) {
+export function renderReport(data, { redact = false } = {}) {
   const s = data.summary;
   let host = data.gatewayUrl;
   try {
@@ -255,7 +278,7 @@ export function renderReport(data) {
   // in the referer — on a page we told them never leaves their machine. A nicer
   // typeface is not worth a request they did not ask for and we did not
   // disclose. System fonts only.
-  return `<title>Anyray Simulator · ${esc(host)}</title>
+  return `<title>Anyray Simulator · ${esc(host)}${redact ? ' · shareable' : ''}</title>
 <style>${STYLE}</style>
 <div class="wrap">
   <header class="masthead">
@@ -271,6 +294,17 @@ export function renderReport(data) {
     </dl>
   </header>
 
+  ${
+    redact
+      ? `<section class="caveat redacted">
+    <p><strong>Shareable copy — prompts and answers removed.</strong></p>
+    <p>This version carries the numbers and none of the content: no prompts, no model answers, and no required-fact strings (those are verbatim values out of your own data, so they are shown as counts).</p>
+    <p><strong>Still in this file, so check before you send it:</strong> your workload ids, your gateway host, your model name, and the token counts themselves. Workload ids are kept because a reader has to be able to refer to a row — if one of yours names something you would rather not share, rename the file in <code>workloads/</code> and re-run the report.</p>
+    <p>The full version, with both answers side by side, is in <code>report.html</code> and stays on this machine.</p>
+  </section>`
+      : ''
+  }
+
   <section class="caveat">
     <p><strong>This proves per request. It does not prove per session.</strong></p>
     <p>Every number here compares one request sent twice. A live agent reacts to what changed and may take a different number of turns, so a per-request saving is not a session-level saving. Measuring that needs weeks of your real traffic — it is what the gateway's audited holdout is for.</p>
@@ -278,7 +312,7 @@ export function renderReport(data) {
 
   <div class="verdicts">
     ${costPanel(s)}
-    ${qualityPanel(s)}
+    ${qualityPanel(s, redact)}
   </div>
 
   <section>
@@ -290,16 +324,20 @@ export function renderReport(data) {
           <th>Workload</th><th class="num">Anyray off</th><th class="num">Anyray on</th>
           <th class="num">Saved</th><th class="num">Facts kept</th><th>Strategies</th>
         </tr></thead>
-        <tbody>${tableRows(s.rows)}</tbody>
+        <tbody>${tableRows(s.rows, redact)}</tbody>
       </table>
     </div>
   </section>
 
-  <section>
+  ${
+    redact
+      ? ''
+      : `<section>
     <h2>Both answers</h2>
     <p class="eyebrow section-note">First successful run of each arm.</p>
     ${answerBlocks(s.rows)}
-  </section>
+  </section>`
+  }
 
   <footer>
     <p>Token counts come from the provider's <code>usage</code> field on both runs. Required facts are the ones each workload declares in <code>mustInclude</code> — your definition of a correct answer, not ours. A workload counts as a regression only when a fact survived without Anyray and stopped surviving with it.</p>
@@ -311,14 +349,23 @@ export function renderReport(data) {
 
 function main() {
   const file = process.argv.includes('--in') ? process.argv[process.argv.indexOf('--in') + 1] : 'results.json';
-  const out = process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : 'report.html';
+  const redact = process.argv.includes('--redact');
+  const out = process.argv.includes('--out')
+    ? process.argv[process.argv.indexOf('--out') + 1]
+    : redact
+      ? 'report-shareable.html'
+      : 'report.html';
   if (!existsSync(file)) {
     console.error(`${file} not found — run \`node prove.mjs\` first.`);
     process.exit(1);
   }
   const data = JSON.parse(readFileSync(file, 'utf8'));
-  writeFileSync(out, renderReport(data));
-  console.log(`Wrote ${out}`);
+  writeFileSync(out, renderReport(data, { redact }));
+  console.log(
+    redact
+      ? `Wrote ${out} — numbers only. Prompts, answers and fact strings removed; workload ids, gateway host and model name kept. Read it before you send it.`
+      : `Wrote ${out}. For a copy you can send on, run: node report.mjs --redact`
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

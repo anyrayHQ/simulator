@@ -71,6 +71,7 @@ you do that.
 ```bash
 node prove.mjs                # the run
 node report.mjs               # writes report.html
+node report.mjs --redact      # writes report-shareable.html — numbers, no content
 ```
 
 Node 20+. No `npm install`, no dependencies, no account beyond the client key you
@@ -210,6 +211,18 @@ Check rather than take our word:
 git check-ignore -v .env results.json report.html
 git status --short          # your captured workloads must not appear here
 ```
+
+### Sending the result to whoever asked
+
+The full `report.html` holds your prompts and both models' answers, which makes
+it a poor thing to email. `node report.mjs --redact` writes
+`report-shareable.html` with the same verdicts, token counts, percentages,
+per-workload rows and strategy names — and no prompts, no answers, and no
+required-fact strings, since a fact is a verbatim value out of your own data.
+
+It tells you what it kept rather than claiming to be clean: your workload ids,
+your gateway host and your model name are still in the file, because a reader
+has to be able to refer to a row. Read it before you send it.
 
 [SECURITY.md](./SECURITY.md) has the reporting process, and a plain list of what
 this tool does **not** protect you from.
