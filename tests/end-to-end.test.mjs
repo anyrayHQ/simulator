@@ -218,3 +218,79 @@ test('results.json survives a crash partway through a paid run', async (t) => {
   assert.ok(partial.results.length >= 1, 'the completed workload was not saved');
   assert.equal(partial.complete, false, 'a partial run must not claim to be complete');
 });
+
+test('an interrupted run resumes instead of re-buying what it already paid for', async (t) => {
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const dir = mkdtempSync(join(tmpdir(), 'proof-'));
+  const out = join(dir, 'results.json');
+  const env = {
+    ...process.env,
+    ANYRAY_GATEWAY_URL: url,
+    ANYRAY_API_KEY: 'ark_test_key',
+    PROOF_MODEL: 'claude-sonnet-5',
+    PROOF_REPEATS: '1',
+  };
+
+  execFileSync('node', ['prove.mjs', '--out', out], { cwd: root, env, encoding: 'utf8' });
+  const full = JSON.parse(readFileSync(out, 'utf8'));
+  assert.equal(full.complete, true);
+  assert.ok(full.results.length >= 3);
+
+  // Stage an interruption: keep the first two, mark it unfinished.
+  const kept = full.results.slice(0, 2).map((r) => r.id);
+  writeFileSync(out, JSON.stringify({ ...full, results: full.results.slice(0, 2), complete: false }));
+
+  const stdout = execFileSync('node', ['prove.mjs', '--out', out], { cwd: root, env, encoding: 'utf8' });
+  assert.match(stdout, /Resuming an interrupted run: 2 workload\(s\)/);
+  // The already-paid workloads must not be re-run — their rows must not reprint.
+  for (const id of kept) {
+    assert.ok(!new RegExp(`^${id}\\s+[\\d,]+ →`, 'm').test(stdout), `${id} was re-bought`);
+  }
+  const resumed = JSON.parse(readFileSync(out, 'utf8'));
+  assert.equal(resumed.complete, true);
+  assert.equal(resumed.results.length, full.results.length);
+  // One run id across the whole file, or the cache-isolation prefix would
+  // differ between the halves.
+  assert.equal(resumed.runId, full.runId);
+
+  // A FINISHED run must not resume — re-running then means "give me fresh numbers".
+  const again = execFileSync('node', ['prove.mjs', '--out', out], { cwd: root, env, encoding: 'utf8' });
+  assert.ok(!/Resuming/.test(again), 'a complete run must start fresh, not resume into a no-op');
+
+  // And --fresh overrides an unfinished one.
+  writeFileSync(out, JSON.stringify({ ...full, results: full.results.slice(0, 2), complete: false }));
+  const fresh = execFileSync('node', ['prove.mjs', '--out', out, '--fresh'], { cwd: root, env, encoding: 'utf8' });
+  assert.ok(!/Resuming/.test(fresh), '--fresh must ignore the partial file');
+
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('a resumed run will not splice two different configurations together', async (t) => {
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const dir = mkdtempSync(join(tmpdir(), 'proof-'));
+  const out = join(dir, 'results.json');
+  const base = {
+    ...process.env,
+    ANYRAY_GATEWAY_URL: url,
+    ANYRAY_API_KEY: 'ark_test_key',
+    PROOF_MODEL: 'claude-sonnet-5',
+    PROOF_REPEATS: '1',
+  };
+  execFileSync('node', ['prove.mjs', '--out', out], { cwd: root, env: base, encoding: 'utf8' });
+  const full = JSON.parse(readFileSync(out, 'utf8'));
+  writeFileSync(out, JSON.stringify({ ...full, results: full.results.slice(0, 2), complete: false }));
+
+  // Same partial file, different MODEL. Splicing would put two models' token
+  // counts under one headline.
+  const stdout = execFileSync('node', ['prove.mjs', '--out', out], {
+    cwd: root,
+    env: { ...base, PROOF_MODEL: 'claude-opus-4-8' },
+    encoding: 'utf8',
+  });
+  assert.match(stdout, /different model/);
+  assert.match(stdout, /Starting fresh rather than mixing two runs/);
+  assert.ok(!/Resuming/.test(stdout));
+  rmSync(dir, { recursive: true, force: true });
+});

@@ -74,10 +74,12 @@ scrubs anything sensitive, and stops for your review. It will not run the proof 
 you do that.
 
 ```bash
-node prove.mjs                # the run
-node report.mjs               # writes report.html
-node report.mjs --redact      # writes report-shareable.html — numbers, no content
+node prove.mjs                # the run — writes results.json AND report.html
+node report.mjs --redact      # a copy you can send on: numbers, no content
 ```
+
+Interrupted partway through? Run the same command again and it picks up where
+it stopped, keeping the workloads you already paid for. `--fresh` starts over.
 
 Node 20+. No `npm install`, no dependencies, no account beyond the client key you
 already have.
@@ -88,7 +90,8 @@ already have.
 > answer running to `PROOF_MAX_TOKENS`, so the real bill lands under it.
 >
 > Results are written after every workload, so a run interrupted at workload
-> nine still has the eight you already paid for.
+> nine still has the eight you already paid for — and re-running resumes from
+> there rather than buying them again.
 
 ## What a run looks like
 

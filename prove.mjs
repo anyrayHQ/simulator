@@ -10,13 +10,14 @@
 //
 // Writes results.json (gitignored — it holds your prompts and both answers).
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
 import { loadWorkloads, stampRunId, newRunId } from './lib/workloads.mjs';
 import { callGateway } from './lib/gateway.mjs';
 import { normalizeUsage } from './lib/usage.mjs';
 import { loadRates } from './lib/rates.mjs';
 import { summarize, renderRow, renderVerdicts } from './lib/verdict.mjs';
+import { renderReport } from './report.mjs';
 import { costOf, fmtUSD } from './lib/rates.mjs';
 
 function parseArgs(argv) {
@@ -27,6 +28,8 @@ function parseArgs(argv) {
     else if (f === '--repeats') a.repeats = Number(argv[++i]);
     else if (f === '--dry-run') a.dryRun = true;
     else if (f === '--examples') a.examples = true;
+    else if (f === '--fresh') a.fresh = true;
+    else if (f === '--no-report') a.noReport = true;
     else if (f === '--no-cache-isolation') a.noCacheIsolation = true;
     else if (f === '--dir') a.dir = argv[++i];
     else if (f === '--out') a.out = argv[++i];
@@ -35,7 +38,39 @@ function parseArgs(argv) {
   return a;
 }
 
-const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--examples] [--dir workloads]`;
+const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--examples] [--fresh] [--no-report] [--dir workloads]`;
+
+/**
+ * Pick up an INTERRUPTED run rather than re-buying what it already paid for.
+ *
+ * Only an interrupted one: a file marked complete means the last run finished,
+ * and someone re-running then wants fresh numbers, not "nothing to do". And
+ * only when the run is comparable — a different gateway, model or repeat count
+ * would splice two incompatible halves into one verdict, which is worse than
+ * spending the money again.
+ */
+function resumable(out, cfg, fresh) {
+  if (fresh || !existsSync(out)) return null;
+  let prior;
+  try {
+    prior = JSON.parse(readFileSync(out, 'utf8'));
+  } catch {
+    return null;
+  }
+  if (prior.complete !== false || !Array.isArray(prior.results) || !prior.results.length) return null;
+  const mismatch = [
+    prior.gatewayUrl !== cfg.gatewayUrl && 'gateway',
+    prior.model !== cfg.model && 'model',
+    prior.repeats !== cfg.repeats && 'repeats',
+  ].filter(Boolean);
+  if (mismatch.length) {
+    console.log(
+      `${out} holds an unfinished run with a different ${mismatch.join(' and ')}. Starting fresh rather than mixing two runs into one verdict.\n`
+    );
+    return null;
+  }
+  return prior;
+}
 
 /**
  * Name the ACTUAL problem on the first failed call.
@@ -160,41 +195,64 @@ async function main() {
   if (args.repeats) cfg.repeats = args.repeats;
   const rates = loadRates();
 
-  const calls = workloads.length * cfg.repeats * 2;
-  // A call count is not a number anyone can say yes or no to. Estimate the
-  // spend from the workloads themselves — chars/4 on the body, which is rough,
-  // and deliberately rough UPWARDS by ignoring any saving the optimized arm
-  // might produce. Better to over-quote the bill than to surprise someone.
-  const estInputTokens = workloads.reduce(
-    (a, w) => a + Math.round(JSON.stringify(w.body).length / 4),
-    0
-  );
-  const est = costOf(rates, cfg.model, {
-    uncachedInput: estInputTokens * cfg.repeats * 2,
-    cacheWrite: 0,
-    cacheRead: 0,
-    output: workloads.length * cfg.repeats * 2 * cfg.maxTokens,
-  }, { includeOutput: true });
-  console.log(
-    `${workloads.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}.\n` +
-      (est != null
-        ? `Rough ceiling at list price: ${fmtUSD(est)} — assumes no saving and every answer running to PROOF_MAX_TOKENS, so the real bill should come in under it. Billed to you, not to us.\n`
-        : `No published rate for ${cfg.model}, so this cannot estimate the spend. Billed to you, not to us.\n`)
-  );
-
-  // One id per run, stamped into both arms, so a previous run's provider cache
-  // cannot flatter this one. See lib/workloads.mjs.
-  const runId = newRunId();
+  // Resume before choosing a run id: a resumed run keeps the original, so every
+  // workload in one results file shares one cache-isolation prefix.
+  const prior = args.only ? null : resumable(args.out, cfg, args.fresh);
+  const runId = prior?.runId ?? newRunId();
+  const results = prior ? [...prior.results] : [];
+  const done = new Set(results.map((r) => r.id));
+  if (prior) {
+    console.log(
+      `Resuming an interrupted run: ${done.size} workload(s) already measured and paid for are kept. Use --fresh to start over.\n`
+    );
+  }
   if (!args.noCacheIsolation) {
     console.log(
       `Cache isolation: this run stamps id ${runId} into every prompt, identically in both arms, so a previous run's provider cache cannot be mistaken for a saving. Disable with --no-cache-isolation.\n`
     );
   }
 
-  const results = [];
   args.totalWorkloads = workloads.length;
-  let firstCall = true;
+  let firstCall = results.length > 0 ? false : true;
+  // Quote only what this invocation will actually buy — on a resume the
+  // already-paid workloads are not part of the bill, and including them would
+  // over-quote by exactly the amount the resume just saved.
+  const todo = workloads.filter((w) => !done.has(w.id));
+  const calls = todo.length * cfg.repeats * 2;
+  // A call count is not a number anyone can say yes or no to. Estimate from the
+  // workloads themselves — chars/4, rough, and deliberately rough UPWARDS by
+  // assuming no saving at all. Better to over-quote than to surprise someone.
+  const estInputTokens = todo.reduce((a, w) => a + Math.round(JSON.stringify(w.body).length / 4), 0);
+  const est = costOf(
+    rates,
+    cfg.model,
+    {
+      uncachedInput: estInputTokens * cfg.repeats * 2,
+      cacheWrite: 0,
+      cacheRead: 0,
+      output: todo.length * cfg.repeats * 2 * cfg.maxTokens,
+    },
+    { includeOutput: true }
+  );
+  console.log(
+    `${todo.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}.\n` +
+      (est != null
+        ? `Rough ceiling at list price: ${fmtUSD(est)} — assumes no saving and every answer running to PROOF_MAX_TOKENS, so the real bill should come in under it. Billed to you, not to us.\n`
+        : `No published rate for ${cfg.model}, so this cannot estimate the spend. Billed to you, not to us.\n`)
+  );
+
+  const showProgress = Boolean(process.stdout.isTTY) && workloads.length > 1;
+  let index = 0;
   for (const rawWl of workloads) {
+    index++;
+    if (done.has(rawWl.id)) continue;
+    // A ten-workload run is minutes of silence between rows otherwise.
+    // TTY only: a carriage return does not overwrite anything when stdout is a
+    // pipe or a file, so in CI logs and captured output it would leave the
+    // progress line sitting in front of the result row instead of clearing it.
+    if (showProgress) {
+      process.stdout.write(`  … ${rawWl.id} (${index}/${workloads.length})\r`);
+    }
     const wl = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
     const bypassedRuns = [];
     const optimizedRuns = [];
@@ -223,6 +281,7 @@ async function main() {
     const res = { id: wl.id, title: wl.title, mustInclude: wl.mustInclude, body: wl.body, bypassedRuns, optimizedRuns };
     results.push(res);
     const summary = summarize({ results: [res], model: cfg.model, rates, repeats: cfg.repeats });
+    if (showProgress) process.stdout.write('\r' + ' '.repeat(72) + '\r');
     console.log(renderRow(summary.rows[0]));
 
     // Write after EVERY workload. These calls cost real money, and a crash on
@@ -233,10 +292,23 @@ async function main() {
   const summary = summarize({ results, model: cfg.model, rates, repeats: cfg.repeats });
   console.log(renderVerdicts(summary));
   writeResults(args.out, cfg, runId, args, results, rates);
-  console.log(
-    `\nWrote ${args.out}. Run \`node report.mjs\` for the readable version, or ` +
-      `\`node report.mjs --redact\` for a copy you can send on with the prompts and answers removed.`
-  );
+  // Write the readable report too. It was a separate command nobody was told
+  // to run until after the fact, which meant the artifact most worth looking at
+  // was the one most likely never generated.
+  if (!args.noReport) {
+    // Sit the report beside the results file it came from, whatever that was
+    // named — not in the working directory, which is where a --out somewhere
+    // else used to strand it.
+    const finalPath =
+      args.out === 'results.json' ? 'report.html' : args.out.replace(/\.json$/i, '') + '.report.html';
+    writeFileSync(finalPath, renderReport(JSON.parse(readFileSync(args.out, 'utf8'))));
+    console.log(`\nWrote ${args.out} and ${finalPath} — open that one.`);
+    console.log(
+      `For a copy you can send on, with the prompts and answers stripped out: node report.mjs --redact`
+    );
+  } else {
+    console.log(`\nWrote ${args.out}.`);
+  }
 
   // A lost fact is a failing proof, and CI should be able to see that.
   if (summary.quality.regressions.length) process.exit(2);
