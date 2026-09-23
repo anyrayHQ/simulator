@@ -259,3 +259,35 @@ test('shipped examples step aside once the customer has their own', async () => 
   assert.equal(fresh.captured.length, 0);
   assert.equal(fresh.examples.length, 1);
 });
+
+test('a truncated answer is never reported as a lost fact', async () => {
+  // PROOF_MAX_TOKENS is OUR ceiling. A fact the answer never reached is missing
+  // because we cut it off, not because the model dropped it. Verified live: at
+  // max_tokens 12 a real answer came back "The failing order is ord_88412,
+  // which failed in" and two facts read as missing.
+  const { compareArms, wasTruncated } = await import('../lib/facts.mjs');
+  assert.ok(wasTruncated({ finishReason: 'length' }));
+  assert.ok(wasTruncated({ finishReason: 'max_tokens' }));
+  assert.ok(!wasTruncated({ finishReason: 'end_turn' }));
+
+  // THE DANGEROUS CASE: only the optimized arm truncates. Without the guard
+  // that is a "LOST FACTS" headline blaming us for our own token ceiling —
+  // the most expensive wrong answer this tool can give.
+  const asymmetric = compareArms({
+    bypassedRuns: [{ answer: 'ECONNRESET on payments-api for ord_88412', finishReason: 'end_turn' }],
+    optimizedRuns: [{ answer: 'The failing order is ord_88412, which', finishReason: 'length' }],
+    mustInclude: ['ECONNRESET', 'payments-api', 'ord_88412'],
+  });
+  assert.equal(asymmetric.truncated, true);
+  assert.equal(asymmetric.regression, false, 'a truncated arm must not be reported as a regression');
+  assert.equal(asymmetric.inconclusive, true);
+
+  // A genuine loss, with both arms finishing cleanly, still reports.
+  const real = compareArms({
+    bypassedRuns: [{ answer: 'ECONNRESET on payments-api for ord_88412', finishReason: 'end_turn' }],
+    optimizedRuns: [{ answer: 'Something failed for ord_88412', finishReason: 'end_turn' }],
+    mustInclude: ['ECONNRESET', 'payments-api', 'ord_88412'],
+  });
+  assert.equal(real.truncated, false);
+  assert.equal(real.regression, true);
+});

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -178,4 +178,43 @@ test('a stand-down is reported as a reason, not as an empty 0%', async (t) => {
   assert.ok(stdout.includes('Anyray stood down here'), stdout);
   // And the suppression reason survives into results.json for the reader.
   assert.ok(row.suppressed.some((s) => s.includes('no_retrieve')), JSON.stringify(row.suppressed));
+});
+
+test('results.json survives a crash partway through a paid run', async (t) => {
+  // Every workload is 2 x repeats of billed calls. Writing only at the end
+  // meant a failure on workload 9 of 10 threw away the eight already paid for.
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const out = join(mkdtempSync(join(tmpdir(), 'proof-')), 'results.json');
+  const env = {
+    ...process.env,
+    ANYRAY_GATEWAY_URL: url,
+    ANYRAY_API_KEY: 'ark_test_key',
+    PROOF_MODEL: 'claude-sonnet-5',
+    PROOF_REPEATS: '1',
+  };
+
+  const child = spawn('node', ['prove.mjs', '--out', out], { cwd: root, env, stdio: ['ignore', 'pipe', 'ignore'] });
+  // Kill once the SECOND workload row has printed: by then the first workload's
+  // write has certainly landed, and we are still mid-run with money spent on
+  // workloads that will never be reported unless they were saved as they went.
+  await new Promise((resolve) => {
+    let rows = 0;
+    child.stdout.on('data', (chunk) => {
+      for (const line of String(chunk).split('\n')) {
+        if (/^(example|\d)\S*\s+[\d,]+ →/.test(line)) rows++;
+      }
+      if (rows >= 2) {
+        child.kill('SIGKILL');
+        resolve();
+      }
+    });
+    child.on('exit', resolve);
+  });
+  await new Promise((r) => setTimeout(r, 300));
+
+  assert.ok(existsSync(out), 'a killed run left no results at all');
+  const partial = JSON.parse(readFileSync(out, 'utf8'));
+  assert.ok(partial.results.length >= 1, 'the completed workload was not saved');
+  assert.equal(partial.complete, false, 'a partial run must not claim to be complete');
 });

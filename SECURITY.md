@@ -81,6 +81,9 @@ should point at production data.
   inference requests and has no use for more privilege.
 - **The fact check is substring survival, not comprehension.** It is biased
   toward reporting damage rather than hiding it, so false alarms are possible.
+  One class of false alarm is handled explicitly: if an answer is cut off at
+  `PROOF_MAX_TOKENS`, that workload's quality verdict is withheld rather than
+  blamed on the model, because the missing fact is our ceiling.
 - **The optional judge sends both answers to your model.** `judge.mjs` is
   opt-in; if your answers are sensitive, do not run it.
 - **`report.html` is a local file, not a private one.** Nothing stops it being

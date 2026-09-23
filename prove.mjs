@@ -17,6 +17,7 @@ import { callGateway } from './lib/gateway.mjs';
 import { normalizeUsage } from './lib/usage.mjs';
 import { loadRates } from './lib/rates.mjs';
 import { summarize, renderRow, renderVerdicts } from './lib/verdict.mjs';
+import { costOf, fmtUSD } from './lib/rates.mjs';
 
 function parseArgs(argv) {
   const a = { only: null, repeats: null, dryRun: false, dir: 'workloads', out: 'results.json' };
@@ -95,6 +96,37 @@ async function runOnce(cfg, wl, optimize) {
   }
 }
 
+/**
+ * Write results after every workload, not once at the end.
+ *
+ * Each workload is 2 x repeats of real, billed provider calls. Writing only on
+ * success meant a crash on workload 9 of 10 discarded the eight already paid
+ * for — and the likeliest crash is a provider hiccup partway through a long
+ * run, which is exactly when you least want to start over.
+ */
+function writeResults(out, cfg, runId, args, results, rates) {
+  const summary = summarize({ results, model: cfg.model, rates, repeats: cfg.repeats });
+  writeFileSync(
+    out,
+    JSON.stringify(
+      {
+        ranAt: new Date().toISOString(),
+        runId: args.noCacheIsolation ? null : runId,
+        cacheIsolation: !args.noCacheIsolation,
+        gatewayUrl: cfg.gatewayUrl,
+        model: cfg.model,
+        repeats: cfg.repeats,
+        endpoint: cfg.endpoint,
+        complete: results.length === args.totalWorkloads,
+        results,
+        summary,
+      },
+      null,
+      2
+    ) + '\n'
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return console.log(USAGE);
@@ -129,8 +161,25 @@ async function main() {
   const rates = loadRates();
 
   const calls = workloads.length * cfg.repeats * 2;
+  // A call count is not a number anyone can say yes or no to. Estimate the
+  // spend from the workloads themselves — chars/4 on the body, which is rough,
+  // and deliberately rough UPWARDS by ignoring any saving the optimized arm
+  // might produce. Better to over-quote the bill than to surprise someone.
+  const estInputTokens = workloads.reduce(
+    (a, w) => a + Math.round(JSON.stringify(w.body).length / 4),
+    0
+  );
+  const est = costOf(rates, cfg.model, {
+    uncachedInput: estInputTokens * cfg.repeats * 2,
+    cacheWrite: 0,
+    cacheRead: 0,
+    output: workloads.length * cfg.repeats * 2 * cfg.maxTokens,
+  }, { includeOutput: true });
   console.log(
-    `${workloads.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}. These are billed to you.\n`
+    `${workloads.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}.\n` +
+      (est != null
+        ? `Rough ceiling at list price: ${fmtUSD(est)} — assumes no saving and every answer running to PROOF_MAX_TOKENS, so the real bill should come in under it. Billed to you, not to us.\n`
+        : `No published rate for ${cfg.model}, so this cannot estimate the spend. Billed to you, not to us.\n`)
   );
 
   // One id per run, stamped into both arms, so a previous run's provider cache
@@ -143,6 +192,7 @@ async function main() {
   }
 
   const results = [];
+  args.totalWorkloads = workloads.length;
   let firstCall = true;
   for (const rawWl of workloads) {
     const wl = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
@@ -174,29 +224,15 @@ async function main() {
     results.push(res);
     const summary = summarize({ results: [res], model: cfg.model, rates, repeats: cfg.repeats });
     console.log(renderRow(summary.rows[0]));
+
+    // Write after EVERY workload. These calls cost real money, and a crash on
+    // workload 9 of 10 used to throw away the eight already paid for.
+    writeResults(args.out, cfg, runId, args, results, rates);
   }
 
   const summary = summarize({ results, model: cfg.model, rates, repeats: cfg.repeats });
   console.log(renderVerdicts(summary));
-
-  writeFileSync(
-    args.out,
-    JSON.stringify(
-      {
-        ranAt: new Date().toISOString(),
-        runId: args.noCacheIsolation ? null : runId,
-        cacheIsolation: !args.noCacheIsolation,
-        gatewayUrl: cfg.gatewayUrl,
-        model: cfg.model,
-        repeats: cfg.repeats,
-        endpoint: cfg.endpoint,
-        results,
-        summary,
-      },
-      null,
-      2
-    ) + '\n'
-  );
+  writeResults(args.out, cfg, runId, args, results, rates);
   console.log(
     `\nWrote ${args.out}. Run \`node report.mjs\` for the readable version, or ` +
       `\`node report.mjs --redact\` for a copy you can send on with the prompts and answers removed.`

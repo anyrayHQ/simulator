@@ -83,8 +83,12 @@ Node 20+. No `npm install`, no dependencies, no account beyond the client key yo
 already have.
 
 > **This spends your provider budget.** Each workload costs 2 × `PROOF_REPEATS`
-> calls — six by default. Ten workloads ≈ 60 calls. The run prints the count
-> before it starts.
+> calls — six by default. Before spending anything the run prints the call count
+> and a rough ceiling in dollars, worked out assuming no saving at all and every
+> answer running to `PROOF_MAX_TOKENS`, so the real bill lands under it.
+>
+> Results are written after every workload, so a run interrupted at workload
+> nine still has the eight you already paid for.
 
 ## What a run looks like
 
