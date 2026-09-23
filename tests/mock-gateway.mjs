@@ -107,7 +107,9 @@ export function startMockGateway({ mode = 'healthy', port = 0 } = {}) {
           };
 
       res.setHeader('content-type', 'application/json');
-      if (!bypassed && trimmable) {
+      // The gateway gates the optimization header behind x-anyray-test. Mirror
+      // that here, or the client could stop sending it and no test would fail.
+      if (!bypassed && trimmable && req.headers['x-anyray-test']) {
         res.setHeader(
           'x-anyray-optimization',
           JSON.stringify([{ strategy: 'context_compression' }, { strategy: 'relevance_filter' }])

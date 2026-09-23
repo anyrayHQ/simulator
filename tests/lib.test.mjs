@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeUsage, savedPct } from '../lib/usage.mjs';
 import { checkFacts, survivingFacts, compareArms } from '../lib/facts.mjs';
-import { rateFor, costOf } from '../lib/rates.mjs';
+import { rateFor, costOf, loadRates } from '../lib/rates.mjs';
 import { validateWorkload } from '../lib/workloads.mjs';
 import { parseEnvFile, resolveConfig } from '../lib/env.mjs';
 import { parseCompletion, parseMessages } from '../lib/gateway.mjs';
@@ -76,22 +76,47 @@ test('facts: a fact lost only with Anyray on IS a regression', () => {
   assert.equal(r.optimizedKept, 2);
 });
 
-test('rates: exact, dated and prefixed model ids resolve; unknown ones do not', () => {
+test('rates: exact and dated model ids resolve; unknown ones report nothing', () => {
   const rates = {
     models: { 'claude-sonnet-5': { input: 2, output: 10 } },
     cache: { writeMultiplier: 1.25, readMultiplier: 0.1 },
   };
   assert.equal(rateFor(rates, 'claude-sonnet-5').input, 2);
   assert.equal(rateFor(rates, 'claude-sonnet-5-20260514').input, 2);
-  assert.equal(rateFor(rates, 'claude-sonnet-5-prod').input, 2);
+  assert.equal(rateFor(rates, 'claude-sonnet-5[1m]').input, 2);
   assert.equal(rateFor(rates, 'some-other-model'), null);
   assert.equal(costOf(rates, 'some-other-model', { uncachedInput: 1e6, cacheWrite: 0, cacheRead: 0, output: 0 }), null);
+});
+
+test('rates: a NEW model never inherits an OLDER model\'s rate by prefix', () => {
+  // claude-opus-5-5 shipped at $4/$20 and delimiter-extends claude-opus-5 at
+  // $5/$25. A longest-prefix match prices it 25% HIGH while looking priced,
+  // which over-states the saving — the exact direction this repo must not err.
+  const real = loadRates('rates.json');
+  assert.equal(rateFor(real, 'claude-opus-5-5').input, 4);
+  assert.equal(rateFor(real, 'claude-opus-5').input, 5);
+  // An id we have never heard of prices at nothing, not at its neighbour's rate.
+  assert.equal(rateFor(real, 'claude-opus-7-turbo'), null);
+  assert.equal(rateFor(real, 'claude-sonnet-5-prod'), null);
 });
 
 test('rates: cache reads and writes price at their own rates', () => {
   const rates = { models: { m: { input: 10, output: 50 } }, cache: { writeMultiplier: 1.25, readMultiplier: 0.1 } };
   const cost = costOf(rates, 'm', { uncachedInput: 0, cacheWrite: 1e6, cacheRead: 1e6, output: 0 });
   assert.equal(Number(cost.toFixed(2)), 13.5); // 12.50 write + 1.00 read
+});
+
+test('rates: a model that reads cached input below the house tier is honoured', () => {
+  // Fable 5.1 reads at 0.025x, not the house 0.1x. Inheriting the house tier
+  // would charge cached tokens 4x their real cost, and on warm agent traffic
+  // cached reads are most of the input.
+  const real = loadRates('rates.json');
+  const oneMillionCachedReads = { uncachedInput: 0, cacheWrite: 0, cacheRead: 1e6, output: 0 };
+  const usd = (m) => Number(costOf(real, m, oneMillionCachedReads).toFixed(4));
+  assert.equal(usd('claude-fable-5-1'), 0.25);
+  assert.equal(usd('claude-opus-5-5'), 0.2);
+  // Opus 5 declares no override, so it stays on the house 0.1x of $5.
+  assert.equal(usd('claude-opus-5'), 0.5);
 });
 
 test('workloads: a workload without required facts is rejected', () => {
