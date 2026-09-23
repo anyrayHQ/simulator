@@ -4,16 +4,73 @@
 checkout of this repo, with your own project open. It's written for an agent to
 execute, not for a person to read.
 
-It will ask you for your gateway URL and key, verify that a request actually
-succeeds, find real prompts in your project, turn the ten most typical into
-workloads, work out the facts each answer must carry, scrub anything sensitive,
-and then stop and show you what it captured. It will **not** run the proof — you
-do that, after you've looked.
+It will check whether this is worth doing at all, ask for your gateway URL and
+key, verify that a request actually succeeds, find the prompts your project
+really sends, turn the ten most typical into workloads, work out the facts each
+answer must carry, scrub anything sensitive, and then stop and show you what it
+captured. It will **not** run the proof — you do that, after you've looked.
+
+It is also told when to stop and say "don't bother", which matters more than the
+happy path: a report built on prompts that were never yours proves nothing, and
+costs you provider budget to produce.
 
 ---
 
-You are setting up a simulator run for the Anyray gateway. Work through these steps
-in order. Stop at the end of step 6 and report back; do not run `prove.mjs`.
+You are setting up a simulator run for the Anyray gateway. Work through these
+steps in order. Gather facts first, state a plan, get a yes, then act. Stop at
+the end of step 6 and report back; do not run `prove.mjs`.
+
+## Step 0 — Preflight, and whether this is worth doing at all
+
+Read-only. Change nothing and install nothing yet.
+
+```sh
+node --version                      # needs >= 20
+git rev-parse --show-toplevel       # are we inside the simulator checkout?
+ls .env 2>/dev/null                 # already configured?
+command -v anyray-connect           # is this machine enrolled?
+```
+
+Then look at the project the person actually wants measured — not this repo —
+and answer one question before anything else: **does this project send prompts
+to a model?** Grep it for a `messages` array, a system prompt, an SDK client, a
+recorded transcript.
+
+### When to tell them not to bother
+
+Say so plainly and stop. A setup that produces a meaningless report wastes their
+provider budget and their afternoon, and it costs us more credibility than
+having no tool at all.
+
+- **No real prompts in the project.** If it consumes a hosted agent rather than
+  calling models itself, there is nothing here to capture. Ask whether they can
+  paste two or three prompts they actually send. If they cannot, stop.
+- **No gateway yet.** This measures a deployed Anyray gateway on their own
+  traffic. Without one there is nothing to bypass, and the two arms are
+  identical. Point them at `anyrayHQ/benchmarks` instead — committed results
+  anyone can reproduce — and stop.
+- **They want a session-level answer.** "Will my agent bill go down" is not what
+  this measures, and a per-request number read as a session verdict is exactly
+  how these conversations go wrong. Say so, point at the gateway's audited
+  holdout, and stop.
+- **They have not agreed to spend provider budget.** Every workload costs
+  2 × `PROOF_REPEATS` real calls. Ten workloads is about sixty. Get a yes.
+- **The prompts cannot be scrubbed.** If the real traffic is regulated data and
+  removing it would leave a prompt that no longer means anything, this is the
+  wrong instrument. Stop rather than measuring a sanitised fiction.
+
+### State the plan and wait
+
+Before changing anything, tell them in plain language:
+
+1. which workloads you intend to capture, and from where
+2. that their prompts will be written to `workloads/` on this machine —
+   gitignored, but real traffic on disk
+3. what the run will cost in provider calls, and that it is their bill
+4. that this proves per request, not per session
+5. how to undo it — delete `workloads/*` and `.env`
+
+Wait for an explicit yes. Then continue.
 
 ## Step 1 — Configure
 
@@ -168,3 +225,28 @@ Fix anything it reports. Then **stop** and tell the person:
 
 Do not run `node prove.mjs`. It spends their money, and they should look at the
 workloads first.
+
+## Keep the claims bounded
+
+If they ask what this proves, keep every answer factual and limited. The tool's
+whole value is that an evaluator can check it, so overselling here costs more
+than it gains.
+
+- **Per request, not per session.** A live agent reacts to what changed and may
+  take a different number of turns. We have measured this: on one agent task the
+  optimizer cut tokens per call about 10% and the session took four more turns,
+  ending up slightly more expensive. Both numbers are true. This tool sees the
+  first and cannot see the second.
+- **The token counts are the provider's, the facts are theirs.** Neither is ours
+  to adjust. That is the point, and it is the strongest thing you can say.
+- **It can return a bad verdict, and that is deliberate.** If a required fact
+  stops surviving, the run says so and exits non-zero, cost win or not.
+- **A 0% row is a real result, not a broken tool.** It can mean the prompt had
+  nothing worth removing, or that the deployment has those strategies off. The
+  report prints the gateway's own reason. Do not explain it away.
+- **Quality checking is substring survival, not comprehension.** A fact that the
+  model paraphrased away counts as missing. That is a deliberate bias toward
+  reporting damage rather than hiding it, and it means false alarms are possible
+  and false reassurance is less so.
+- **Nothing leaves their infrastructure** beyond the requests that already flow
+  through their own gateway. The repo sends nothing to Anyray.

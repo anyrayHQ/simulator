@@ -71,7 +71,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -81,10 +81,10 @@ h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; letter-spacing: -0
 h1 { font-size: 1.9rem; }
 h2 { font-size: 1.05rem; }
 p { margin: 0; max-width: 62ch; }
-code, .mono, td.num, th.num { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+code, .mono, td.num, th.num { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
 
 .eyebrow {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-soft);
 }
 
@@ -93,14 +93,14 @@ code, .mono, td.num, th.num { font-family: "IBM Plex Mono", ui-monospace, SFMono
 .slip { display: flex; flex-wrap: wrap; gap: 0 2rem; font-size: 0.82rem; }
 .slip div { display: flex; gap: 0.5rem; padding: 0.15rem 0; }
 .slip dt { color: var(--ink-soft); }
-.slip dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+.slip dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 .caveat { border-left: 3px solid var(--accent); padding: 0.1rem 0 0.1rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .caveat strong { font-weight: 600; }
 
 .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1.25rem; }
 .verdict { background: var(--panel); border: 1px solid var(--rule); padding: 1.4rem; display: flex; flex-direction: column; gap: 0.7rem; }
-.verdict .headline { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.verdict .headline { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .verdict .basis { font-size: 0.82rem; color: var(--ink-soft); }
 ul.basis { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.25rem; }
 .verdict.fail { background: var(--bad-wash); border-color: var(--bad); }
@@ -120,7 +120,7 @@ tbody tr.regressed td { background: var(--bad-wash); }
 tbody tr.regressed td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 .flag { display: block; font-size: 0.78rem; color: var(--bad); }
 .flag.mild { color: var(--warn); }
-.tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.72rem; color: var(--ink-soft); }
+.tag { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.72rem; color: var(--ink-soft); }
 
 details { border: 1px solid var(--rule); background: var(--panel); }
 details + details { border-top: none; }
@@ -129,7 +129,7 @@ summary::-webkit-details-marker { color: var(--ink-soft); }
 summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1px; background: var(--rule); border-top: 1px solid var(--rule); }
 .answer { background: var(--panel); padding: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.answer pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.78rem; line-height: 1.5; max-height: 26rem; overflow-y: auto; }
+.answer pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; line-height: 1.5; max-height: 26rem; overflow-y: auto; }
 
 footer { border-top: 1px solid var(--rule); padding-top: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.85rem; color: var(--ink-soft); }
 footer a { color: var(--accent); }
@@ -247,9 +247,15 @@ export function renderReport(data) {
   } catch {
     /* a non-URL gateway string still prints fine as-is */
   }
+  // NO EXTERNAL RESOURCES, DELIBERATELY.
+  //
+  // This page holds the customer's prompts and both models' answers. An earlier
+  // version pulled webfonts from Google, which meant opening the report made a
+  // request to a third party from inside their network, with the report's URL
+  // in the referer — on a page we told them never leaves their machine. A nicer
+  // typeface is not worth a request they did not ask for and we did not
+  // disclose. System fonts only.
   return `<title>Anyray Simulator · ${esc(host)}</title>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>${STYLE}</style>
 <div class="wrap">
   <header class="masthead">

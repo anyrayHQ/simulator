@@ -201,7 +201,18 @@ workloads graded by one model is a small sample, and the report says so.
 Everything the setup prompt writes into `workloads/` is your own traffic, and
 `.gitignore` keeps all of it — plus `results.json` and `report.html`, which hold
 both models' answers — out of git. Nothing is sent anywhere except through the
-gateway your traffic already flows through.
+gateway your traffic already flows through, and `report.html` loads no external
+resources, so opening it makes no third-party request either.
+
+Check rather than take our word:
+
+```bash
+git check-ignore -v .env results.json report.html
+git status --short          # your captured workloads must not appear here
+```
+
+[SECURITY.md](./SECURITY.md) has the reporting process, and a plain list of what
+this tool does **not** protect you from.
 
 ## Files
 

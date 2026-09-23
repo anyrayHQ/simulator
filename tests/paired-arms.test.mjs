@@ -118,3 +118,36 @@ test('the stamp lands where the CACHE looks, not merely where it is convenient',
   const bare = stampRunId({ id: 'w', body: { messages: [{ role: 'user', content: 'hi' }] } }, 'abc12345');
   assert.ok(bare.body.messages[0].content.startsWith('[anyray-simulator abc12345'));
 });
+
+test('report.html loads nothing from a third party', async () => {
+  // The report holds the customer's prompts and both answers. An earlier version
+  // pulled webfonts from Google, so opening it made a request to a third party
+  // from inside their network — on a page the README says never leaves their
+  // machine. A link they may click is fine; a resource the page FETCHES is not.
+  const { renderReport } = await import('../report.mjs');
+  const html = renderReport({
+    ranAt: new Date().toISOString(),
+    gatewayUrl: 'https://gw.example.com',
+    model: 'claude-sonnet-4-5',
+    endpoint: '/v1/chat/completions',
+    repeats: 3,
+    summary: {
+      model: 'claude-sonnet-4-5', repeats: 3, rows: [],
+      cost: { before: 0, after: 0, savedPct: 0, priced: false, cacheState: 'none', usdSavedPct: 0, notMeasured: 0 },
+      quality: { checked: 0, clean: 0, regressions: [], inconclusive: [] },
+      errors: [],
+    },
+  });
+  // Anything that causes a fetch on load: src=, @import, url(), link rel.
+  const fetched = [
+    ...html.matchAll(/(?:src|href)\s*=\s*"(https?:\/\/[^"]+)"/gi),
+    ...html.matchAll(/@import\s+(?:url\()?["']?(https?:\/\/[^"')]+)/gi),
+    ...html.matchAll(/url\(\s*["']?(https?:\/\/[^"')]+)/gi),
+  ].map((m) => ({ url: m[1], tag: m[0] }));
+
+  // An <a href> is a link the reader may choose to follow, not a load.
+  const resourceLoads = fetched.filter((f) => /^src/i.test(f.tag) || /@import/i.test(f.tag) || /^url\(/i.test(f.tag));
+  assert.deepEqual(resourceLoads, [], `report fetches third-party resources: ${JSON.stringify(resourceLoads)}`);
+  assert.ok(!/<link[^>]+href\s*=\s*"https?:/i.test(html), 'report <link>s to an external stylesheet');
+  assert.ok(!/fonts\.(googleapis|gstatic)\.com/i.test(html), 'report still references Google Fonts');
+});
