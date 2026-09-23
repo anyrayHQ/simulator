@@ -231,8 +231,8 @@ function answerBlocks(rows) {
       (r) => `<details>
       <summary><code>${esc(r.id)}</code> <span class="tag">${esc(r.title ?? '')}</span></summary>
       <div class="answers">
-        <div class="answer"><span class="eyebrow">Baseline — your prompt as written</span><pre>${esc(r.answers.bypassed ?? '(no answer)')}</pre></div>
-        <div class="answer"><span class="eyebrow">Optimized — trimmed locally</span><pre>${esc(r.answers.optimized ?? '(no answer)')}</pre></div>
+        <div class="answer"><span class="eyebrow">Anyray off</span><pre>${esc(r.answers.bypassed ?? '(no answer)')}</pre></div>
+        <div class="answer"><span class="eyebrow">Anyray on</span><pre>${esc(r.answers.optimized ?? '(no answer)')}</pre></div>
       </div>
     </details>`
     )
@@ -241,13 +241,12 @@ function answerBlocks(rows) {
 
 export function renderReport(data) {
   const s = data.summary;
-  let host = data.providerUrl;
+  let host = data.gatewayUrl;
   try {
-    host = new URL(data.providerUrl).host;
+    host = new URL(data.gatewayUrl).host;
   } catch {
-    /* a non-URL provider string still prints fine as-is */
+    /* a non-URL gateway string still prints fine as-is */
   }
-  const prov = data.provenance ?? {};
   return `<title>Proof run · ${esc(host)}</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -257,21 +256,18 @@ export function renderReport(data) {
     <span class="eyebrow">Anyray proof run</span>
     <h1>Two verdicts on your own prompts</h1>
     <dl class="slip">
-      <div><dt>provider</dt><dd>${esc(host)}</dd></div>
-      <div><dt>optimizer</dt><dd>${esc(data.optimizerUrl ?? 'not used')}</dd></div>
+      <div><dt>gateway</dt><dd>${esc(host)}</dd></div>
       <div><dt>model</dt><dd>${esc(data.model)}</dd></div>
       <div><dt>endpoint</dt><dd>${esc(data.endpoint)}</dd></div>
       <div><dt>runs per arm</dt><dd>${esc(String(data.repeats))}</dd></div>
       <div><dt>workloads</dt><dd>${s.rows.length}</dd></div>
       <div><dt>ran at</dt><dd>${esc(data.ranAt)}</dd></div>
-      ${prov.optimizerVersion ? `<div><dt>optimizer build</dt><dd>${esc(prov.optimizerVersion)}</dd></div>` : ''}
     </dl>
   </header>
 
   <section class="caveat">
     <p><strong>This proves per request. It does not prove per session.</strong></p>
     <p>Every number here compares one request sent twice. A live agent reacts to what changed and may take a different number of turns, so a per-request saving is not a session-level saving. Measuring that needs weeks of your real traffic — it is what the gateway's audited holdout is for.</p>
-    <p>Both runs went straight from this machine to your provider. The optimizer ran locally, and no prompt on this page was sent to Anyray.</p>
   </section>
 
   <div class="verdicts">
@@ -285,7 +281,7 @@ export function renderReport(data) {
     <div class="scroll">
       <table>
         <thead><tr>
-          <th>Workload</th><th class="num">Baseline</th><th class="num">Optimized</th>
+          <th>Workload</th><th class="num">Anyray off</th><th class="num">Anyray on</th>
           <th class="num">Saved</th><th class="num">Facts kept</th><th>Strategies</th>
         </tr></thead>
         <tbody>${tableRows(s.rows)}</tbody>

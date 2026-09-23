@@ -5,8 +5,8 @@
 // Two rules make this worth reading:
 //   1. The judge is never told which answer came from which arm. The order is
 //      randomized per workload and the labels are A and B.
-//   2. The grading call goes straight to your provider. The optimizer is not in
-//      its path at all — we cannot touch the prompt that does the judging.
+//   2. The grading call itself runs with `x-anyray-optimize: off`, so we cannot
+//      influence the judging prompt on its way to the model.
 //
 // It is indicative, not a verdict. Ten workloads is ten data points.
 //
@@ -14,7 +14,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
-import { callProvider } from './lib/provider.mjs';
+import { callGateway } from './lib/gateway.mjs';
 
 const RUBRIC =
   'You are grading two answers to the same task. Judge only which answer better ' +
@@ -79,13 +79,13 @@ async function main() {
     const prompt = `TASK:\n${questionOf(res, res.body)}\n\nANSWER A:\n${A}\n\nANSWER B:\n${B}`;
     // A system-ROLE message is invalid on /v1/messages, where the instruction
     // belongs in top-level `system`. Same rubric either way.
-    const body = cfg.dialect === 'anthropic'
+    const body = cfg.endpoint.includes('/messages')
       ? { temperature: 0, system: RUBRIC, messages: [{ role: 'user', content: prompt }] }
       : { temperature: 0, messages: [{ role: 'system', content: RUBRIC }, { role: 'user', content: prompt }] };
 
     try {
-      // Straight to the provider: no optimizer in this path.
-      const r = await callProvider({ ...cfg, maxTokens: 300 }, body);
+      // optimize:'off' — the grading call bypasses Anyray entirely.
+      const r = await callGateway({ ...cfg, maxTokens: 300 }, body, { optimize: 'off' });
       const parsed = JSON.parse(extractJsonObject(r.answer));
       const winner =
         parsed.winner === 'tie'

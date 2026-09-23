@@ -32,11 +32,9 @@ jobs:
             exit 1
           fi
 
-      # Unit tests plus the full end-to-end run against a mock provider and a
-      # mock optimizer. Two cases carry this suite: the dropping optimizer,
-      # which proves the quality check can actually fail, and the cold
-      # optimizer, which proves we refuse to measure a pipeline that is still
-      # loading. If either stops failing when it should, this repo is
+      # Unit tests plus the full end-to-end run against a mock gateway in BOTH
+      # states. The dropping-gateway case is the one that proves the quality
+      # check can actually fail — if it ever stops failing, this repo is
       # decorative and CI should say so.
       - name: Tests
         run: npm test
@@ -44,14 +42,3 @@ jobs:
       # The shipped examples are what a customer reads first. They must stay valid.
       - name: Example workloads validate
         run: node prove.mjs --dry-run
-
-      # The privacy claim is a promise in the README, so it is also a test. The
-      # optimizer must default to localhost and nothing may reference a host of
-      # ours in the request path.
-      - name: No Anyray endpoint in the request path
-        run: |
-          if grep -rnE 'anyray\.ai|api\.anyray' lib/ prove.mjs judge.mjs report.mjs; then
-            echo "::error::a proof run must reach only the customer's provider and their local optimizer"
-            exit 1
-          fi
-          echo "ok — the only destinations are the provider and localhost" 

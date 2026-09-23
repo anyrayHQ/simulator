@@ -4,10 +4,11 @@
 checkout of this repo, with your own project open. It's written for an agent to
 execute, not for a person to read.
 
-It will check your provider config and the local container, find real prompts in
-your project, turn the ten most typical into workloads, work out the facts each
-answer must carry, scrub anything sensitive, and then stop and show you what it
-captured. It will **not** run the proof — you do that, after you've looked.
+It will ask you for your gateway URL and key, verify that a request actually
+succeeds, find real prompts in your project, turn the ten most typical into
+workloads, work out the facts each answer must carry, scrub anything sensitive,
+and then stop and show you what it captured. It will **not** run the proof — you
+do that, after you've looked.
 
 ---
 
@@ -20,52 +21,42 @@ Read `.env.example`. Copy it to `.env` if `.env` doesn't already exist.
 
 Ask the person for:
 
-- **their provider base URL** — Anthropic, OpenAI, or a model they host
-  themselves
-- **their own provider API key** — theirs, not an Anyray one. There is no Anyray
-  account involved in this at all.
+- **the Anyray gateway URL** — the base URL their tools already send model calls
+  to
+- **an Anyray client key** (`ark_…`) — a client key, not an admin token
 - **the model** to prove it on — one they actually run in production
+
+If this machine is enrolled with Anyray, the gateway URL may already be
+discoverable: `anyray-connect doctor --json` reports the gateway it routes to.
+Offer what you find as the default; don't assume it's right.
 
 Write the answers into `.env`. **Never print the key** — not in your reply, not
 in a summary, not into any other file. Do not commit `.env`; it's gitignored,
 and it must stay that way.
 
-If they are uneasy about running real prompts against a hosted provider at all,
-point out that `PROVIDER_BASE_URL` accepts a local model (Ollama, vLLM, LM
-Studio). With one of those, nothing leaves the machine.
+## Step 2 — Verify Anyray is actually in the path
 
-## Step 2 — Verify the plumbing, cheaply
-
-Two checks. Do both before capturing anything.
-
-**The container is up and warm:**
+Before anything else, prove the plumbing works. Send one trivial request through
+the gateway, twice — once with `x-anyray-optimize: off` and once without:
 
 ```sh
-curl -sS http://localhost:8088/health
+curl -sS -o /dev/null -w '%{http_code}\n' "$ANYRAY_GATEWAY_URL/v1/chat/completions" \
+  -H "authorization: Bearer $ANYRAY_API_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"model":"'"$PROOF_MODEL"'","max_tokens":16,"messages":[{"role":"user","content":"Reply with the word: ok"}]}'
 ```
 
-`ready` must be `true` and `embedder` must not be `loading`. If the container
-isn't running, `docker compose up -d`; if the embedder is still loading, wait.
-A cold optimizer silently measures a different pipeline, so this matters more
-than it looks.
+Both calls must return 200. If either fails:
 
-**The provider answers, and the whole loop works** — one cheap workload, six
-calls:
+- **401 / 402** — the key isn't valid for that gateway, or enrollment lapsed.
+  Stop and report it. Suggest `anyray-connect doctor --json`.
+- **404** — the endpoint dialect is wrong. Try `/v1/messages` and set
+  `PROOF_ENDPOINT` accordingly.
+- **connection refused / DNS failure** — the URL is wrong, or the gateway isn't
+  reachable from here.
 
-```sh
-node prove.mjs --workload example-02
-```
-
-That one is a short question with nothing to trim, so it should report roughly
-0% saved and keep its facts. If it fails:
-
-- **`provider 401`** — wrong key, or wrong dialect. The error names the dialect
-  it used; set `PROVIDER_DIALECT` to the other one.
-- **`did not become ready`** — the container. See above.
-- **connection refused** — `PROVIDER_BASE_URL` is wrong.
-
-**Do not continue to step 3 until that run succeeds.** Capturing ten workloads
-against broken config wastes their time and their money.
+**Do not continue to step 3 until both calls return 200.** A proof run against a
+gateway that isn't in the path measures nothing, and it will look like a result.
 
 ## Step 3 — Find their real prompts
 
@@ -172,7 +163,7 @@ Fix anything it reports. Then **stop** and tell the person:
    are guessing at what their right answer looks like, and they aren't
 3. what you scrubbed
 4. what the run will cost: 2 × `PROOF_REPEATS` provider calls per workload, on
-   their own provider bill
+   their bill
 5. that they run `node prove.mjs` themselves when they're happy
 
 Do not run `node prove.mjs`. It spends their money, and they should look at the
