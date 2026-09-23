@@ -216,9 +216,16 @@ test('the first failed call names the real problem, not a guess', async () => {
   const { firstCallHint } = await import('../prove.mjs');
   const cfg = { model: 'claude-sonnet-5', gatewayUrl: 'https://gw.example.com' };
 
-  const model = firstCallHint('gateway 404: {"error":{"message":"The model `claude-sonnet-5` does not exist."}}', cfg);
-  assert.match(model, /PROOF_MODEL is "claude-sonnet-5"/);
-  assert.ok(!/API_KEY/.test(model), 'a 404 about the model must not send them to check the key');
+  // The same gateway phrases this two different ways depending on the upstream
+  // it routes to, so match the message, never the status code.
+  for (const wire of [
+    'gateway 404: {"error":{"message":"The model `claude-sonnet-5` does not exist."}}',
+    'gateway 400: {"error":{"message":"bedrock error: The provided model identifier is invalid."}}',
+  ]) {
+    const model = firstCallHint(wire, cfg);
+    assert.match(model, /PROOF_MODEL is "claude-sonnet-5"/, wire);
+    assert.ok(!/API_KEY/.test(model), `must not send them to check the key: ${wire}`);
+  }
 
   const auth = firstCallHint('gateway 401: valid client key required', cfg);
   assert.match(auth, /ANYRAY_API_KEY/);

@@ -46,7 +46,11 @@ const USAGE = `node prove.mjs [--workload <id>] [--repeats <n>] [--dry-run] [--d
  */
 export function firstCallHint(error, cfg) {
   const msg = String(error);
-  if (/\b404\b/.test(msg) || /does not exist|model.*not found|unknown model/i.test(msg)) {
+  // Gateways disagree about how to say "I don't serve that model": observed
+  // 404 "The model `x` does not exist" on one upstream and 400 "The provided
+  // model identifier is invalid" on another, from the SAME gateway. Match on
+  // what the message says, not on the status code.
+  if (/model identifier is invalid|does not exist|model.*not (found|supported)|unknown model|invalid model/i.test(msg)) {
     return (
       `PROOF_MODEL is "${cfg.model}", and this gateway does not serve it.\n` +
       `Set PROOF_MODEL in .env to a model your deployment actually routes — the one your app already sends is the right choice, ` +
