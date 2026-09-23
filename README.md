@@ -100,21 +100,6 @@ One of the shipped examples saves nothing at all. That's deliberate: a short
 question has nothing worth removing, and you should see an honest 0% before you
 believe any of the other numbers.
 
-## And it has to be able to fail
-
-Pointed at a gateway that drops a required fact:
-
-```
-example-01-log-dump           9,036 →  2,892   68%  LOST FACTS (2/3 vs 3/3)
-  ! only missing after the trim: ECONNRESET
-```
-
-Note it still reports the cost win alongside. **Cheaper and worse is a real
-outcome and the tool says so.** A proof tool that cannot return a bad verdict is
-marketing, and an evaluator spots that in the first five minutes. The failure
-path is tested, not asserted — `npm test` runs the whole thing against a mock
-gateway in both states.
-
 ## How the two numbers are made
 
 <details>
@@ -237,21 +222,6 @@ this tool does **not** protect you from.
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
 | `workloads/` | Three worked examples. Yours land here, gitignored. |
-
-## Why this isn't in the benchmarks repo
-
-| | [`benchmarks`](https://github.com/anyrayHQ/benchmarks) | `anyray-simulator` |
-| --- | --- | --- |
-| Points at | the optimizer on `:8088` | your gateway |
-| Credential | admin token | a client key |
-| Payloads | synthetic, committed | yours, never committed |
-| Token counts | tokenizer estimate | provider's `usage` field |
-| Calls a provider | no | yes, on your bill |
-| Results | committed — anyone reproduces them | private, unique to you |
-
-The value proposition is inverted. Benchmarks is credible *because* its results
-are committed and anyone gets the same numbers. This is credible *because* the
-numbers are yours alone.
 
 ## Troubleshooting
 
