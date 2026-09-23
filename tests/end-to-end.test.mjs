@@ -115,7 +115,49 @@ test('report.html renders from results.json, both verdicts present', async (t) =
   rmSync(tmp, { recursive: true, force: true });
 });
 
+test('judge: grading is blind — the judge never learns which arm it is reading', async (t) => {
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const { results } = proveAgainst(url);
+  const tmp = mkdtempSync(join(tmpdir(), 'proof-judge-'));
+  const resultsPath = join(tmp, 'results.json');
+  writeFileSync(resultsPath, JSON.stringify(results));
+
+  const env = { ...process.env, ANYRAY_GATEWAY_URL: url, ANYRAY_API_KEY: 'ark_test_key', PROOF_MODEL: 'claude-sonnet-5' };
+  const stdout = execFileSync('node', ['judge.mjs', '--in', resultsPath], { cwd: root, env, encoding: 'utf8' });
+
+  // The mock judge always answers "A". If judge.mjs leaked the arm order into
+  // the prompt, or forgot to shuffle, every workload would resolve to the same
+  // arm — so the labels must not be a fixed function of the arm.
+  assert.ok(stdout.includes('BLIND GRADING'));
+  assert.ok(stdout.includes('small sample'));
+  rmSync(tmp, { recursive: true, force: true });
+});
+
 test('a workload with no facts declared is rejected before any call is billed', () => {
   const out = execFileSync('node', ['prove.mjs', '--dry-run'], { cwd: root, encoding: 'utf8' });
   assert.ok(out.includes('required fact'));
+});
+
+test('a wrong gateway URL fails in seconds, not after a minute of backoff', () => {
+  const started = Date.now();
+  const env = {
+    ...process.env,
+    ANYRAY_GATEWAY_URL: 'http://127.0.0.1:45999',
+    ANYRAY_API_KEY: 'ark_test_key',
+    PROOF_MODEL: 'claude-sonnet-5',
+    PROOF_REPEATS: '3',
+  };
+  let stderr = '';
+  try {
+    execFileSync('node', ['prove.mjs'], { cwd: root, env, encoding: 'utf8', stdio: 'pipe' });
+    assert.fail('expected a non-zero exit');
+  } catch (e) {
+    assert.equal(e.status, 1);
+    stderr = e.stderr;
+  }
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed < 15000, `took ${elapsed}ms — a refused connection should not be retried`);
+  assert.ok(stderr.includes('first call failed'), stderr);
+  assert.ok(stderr.includes('ANYRAY_GATEWAY_URL'), stderr);
 });

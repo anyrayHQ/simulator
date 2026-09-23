@@ -83,6 +83,7 @@ async function main() {
   );
 
   const results = [];
+  let firstCall = true;
   for (const wl of workloads) {
     const bypassedRuns = [];
     const optimizedRuns = [];
@@ -93,6 +94,18 @@ async function main() {
       const order = i % 2 === 0 ? ['off', 'on'] : ['on', 'off'];
       for (const arm of order) {
         const run = await runOnce(cfg, wl, arm);
+        // If the very first call fails, the config is wrong, not the workload.
+        // Stop here rather than spending the customer's money discovering the
+        // same failure another fifty times.
+        if (firstCall && run.error) {
+          throw new Error(
+            `first call failed, so nothing was measured:\n  ${run.error}\n\n` +
+              `Check ANYRAY_GATEWAY_URL (${cfg.gatewayUrl}) and ANYRAY_API_KEY in .env. ` +
+              `A 401 or 402 usually means the key is not valid for this gateway — ` +
+              `\`anyray-connect doctor --json\` reports which.`
+          );
+        }
+        firstCall = false;
         (arm === 'off' ? bypassedRuns : optimizedRuns).push(run);
         if (run.error) console.error(`  ${wl.id} [anyray ${arm}] failed: ${run.error}`);
       }

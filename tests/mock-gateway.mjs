@@ -5,6 +5,9 @@
 //               answer-bearing fact.
 //   dropping:   the trim also loses a fact. This is the state that proves the
 //               quality check is load-bearing rather than decorative.
+//   flaky:      the same arm reports a different input-token count between two
+//               identical runs — which cannot honestly happen, and which the
+//               run is supposed to call out rather than average away.
 //
 // It reports `usage` the way a real provider does, so prove.mjs is exercised on
 // the same field it will read in production.
@@ -36,11 +39,36 @@ function promptChars(body) {
 }
 
 export function startMockGateway({ mode = 'healthy', port = 0 } = {}) {
+  let seq = 0;
   const server = createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
       const body = JSON.parse(raw || '{}');
+
+      // A grading call from judge.mjs, not a workload. Answer in the judge's
+      // own contract so judge.mjs is exercised end to end too. It always picks
+      // ANSWER A, which is the point: judge.mjs shuffles, so a fixed-preference
+      // judge must come out roughly even across workloads, never all one arm.
+      if (raw.includes('ANSWER A:')) {
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: '{"winner":"A","why":"it names the failing service"}',
+                },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 120, completion_tokens: 12 },
+          })
+        );
+        return;
+      }
+
       const id = identify(body);
       const bypassed = req.headers['x-anyray-optimize'] === 'off';
       const native = req.url.includes('/messages');
@@ -50,8 +78,11 @@ export function startMockGateway({ mode = 'healthy', port = 0 } = {}) {
       // same — exactly the honest 0% the example exists to show.
       const chars = promptChars(body);
       const trimmable = id !== 'example-02-small-question';
-      const inputTokens =
+      let inputTokens =
         bypassed || !trimmable ? Math.round(chars / 4) : Math.round((chars / 4) * 0.28);
+      // Identical bytes must give an identical count. This mode breaks that on
+      // purpose so the guard has something to catch.
+      if (mode === 'flaky') inputTokens += seq++ % 2 === 0 ? 0 : 37;
 
       // A dropping gateway loses the first fact, but only on the optimized arm.
       const kept =
