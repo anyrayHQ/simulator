@@ -81,7 +81,10 @@ Ask the person for:
 - **the Anyray gateway URL** — the base URL their tools already send model calls
   to
 - **an Anyray client key** (`ark_…`) — a client key, not an admin token
-- **the model** to prove it on — one they actually run in production
+- **the model** to prove it on — the id their application actually sends. There
+  is no default and you must not invent one: every deployment routes a different
+  set, and a model this gateway does not serve fails on the first call. If they
+  are unsure, their Anyray console lists what it serves.
 
 If this machine is enrolled with Anyray, the gateway URL may already be
 discoverable: `anyray-connect doctor --json` reports the gateway it routes to.
@@ -93,27 +96,41 @@ and it must stay that way.
 
 ## Step 2 — Verify Anyray is actually in the path
 
-Before anything else, prove the plumbing works. Send one trivial request through
-the gateway, twice — once with `x-anyray-optimize: off` and once without:
+Before anything else, prove the plumbing works. Do not hand-roll a `curl` for
+this — the values live in `.env`, which is not exported into your shell, so a
+command referencing `$ANYRAY_GATEWAY_URL` silently sends a request to nowhere.
+Use the repo's own smoke test, which reads `.env` the same way the real run
+does:
 
 ```sh
-curl -sS -o /dev/null -w '%{http_code}\n' "$ANYRAY_GATEWAY_URL/v1/chat/completions" \
-  -H "authorization: Bearer $ANYRAY_API_KEY" \
-  -H 'content-type: application/json' \
-  -d '{"model":"'"$PROOF_MODEL"'","max_tokens":16,"messages":[{"role":"user","content":"Reply with the word: ok"}]}'
+node prove.mjs --workload example-02
 ```
 
-Both calls must return 200. If either fails:
+That is six calls against a deliberately trivial workload, and it exercises the
+whole path: both arms, the bypass header, the provider's usage field, and the
+fact check.
 
-- **401 / 402** — the key isn't valid for that gateway, or enrollment lapsed.
-  Stop and report it. Suggest `anyray-connect doctor --json`.
-- **404** — the endpoint dialect is wrong. Try `/v1/messages` and set
-  `PROOF_ENDPOINT` accordingly.
-- **connection refused / DNS failure** — the URL is wrong, or the gateway isn't
-  reachable from here.
+**It should report roughly 0% saved and keep its facts.** That workload is a
+short question with nothing worth trimming, so 0% is the correct answer, not a
+failure.
 
-**Do not continue to step 3 until both calls return 200.** A simulator run against a
-gateway that isn't in the path measures nothing, and it will look like a result.
+If it fails, the run names the cause. The four you are likely to hit:
+
+- **`PROOF_MODEL is "..." and this gateway does not serve it`** — every
+  deployment routes a different set of models. Ask them which model their
+  application actually sends, and use that; the dollar figure depends on its
+  rate. Do not guess another name.
+- **`ANYRAY_API_KEY is not valid`** — wrong key, or one minted for a different
+  deployment. Suggest `anyray-connect doctor --json`. Stop and report.
+- **`402 ... no entitlement lease`** — the deployment will not serve `/v1/*` at
+  all. Nothing in `.env` fixes this. Stop and tell them to talk to whoever runs
+  the gateway.
+- **`Nothing answered at ...`** — wrong host, or it is not reachable from here.
+
+**Do not continue to step 3 until that run succeeds.** Capturing ten workloads
+against broken config wastes their time and their money, and a simulator run
+against a gateway that is not in the path measures nothing while looking like a
+result.
 
 ## Step 3 — Find their real prompts
 
