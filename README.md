@@ -1,100 +1,154 @@
-# Proof run
+<p align="center">
+  <strong>Proof run</strong>
+</p>
 
-Point this at your own Anyray gateway, give it your own prompts, and run one
-command. It sends each prompt twice — once with Anyray bypassed, once the normal
-way — and answers two questions with numbers you can check:
+<p align="center">
+  <strong>Your prompts. Your gateway. Your numbers.</strong>
+</p>
 
-1. **Does it cost less?** Input tokens, taken from your provider's own `usage`
-   field on both runs.
+<p align="center">
+  <sub>Run your own traffic through Anyray twice and find out what it costs — and whether the answers still hold.</sub>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/node-%E2%89%A520-3c873a" alt="Node 20+">
+  <img src="https://img.shields.io/badge/dependencies-none-1a7f5a" alt="No dependencies">
+  <img src="https://img.shields.io/badge/scope-per--request-8a5a00" alt="Per-request">
+  <img src="https://img.shields.io/badge/your%20prompts-never%20committed-0e6a6a" alt="Prompts never committed">
+</p>
+
+---
+
+You asked how you'd know the savings are real. This is the answer we'd want if we
+were you: a repo you run yourself, on your own prompts, against your own gateway,
+where every number comes from your provider rather than from us.
+
+One command sends each prompt twice — once with Anyray bypassed, once the way
+your app already sends it — and answers two questions:
+
+1. **Does it cost less?** Input tokens, from your provider's own `usage` field.
 2. **Are the answers still right?** Checked against facts *you* declared a
-   correct answer has to carry.
+   correct answer must carry.
 
-Neither number is ours to adjust. Same model, same key, same path — one header
-is the only difference between the two runs.
-
----
-
-## What this proves, and what it doesn't
-
-**This proves per request. It does not prove per session.**
-
-Every number here compares one request sent twice. A live coding agent reacts to
-what changed: if a reply is shaped differently it may take a different number of
-turns, and a per-request saving is not the same as a cheaper session. Proving
-*that* takes weeks of your real traffic, and it's what the gateway's audited
-holdout is for. Don't let anyone — including us — read this report as a
-session-level verdict.
-
-| Question | Does this repo answer it? |
-|---|---|
-| Is Anyray actually in my request path? | **Yes** — setup fails loudly if it isn't |
-| How many tokens does it take out of my prompts? | **Yes** — exactly, from the provider's count |
-| What does that save me in dollars? | **Yes** — at published list rates |
-| Do the answers still contain what I need? | **Yes** — facts you declared, checked on every run |
-| Would a human prefer the unoptimized answer? | **Indicative** — blind grading, small sample |
-| Does my whole agent session get cheaper? | **No** — use the gateway's audited holdout |
+Same model, same key, same path. One header is the only difference.
 
 ---
 
-## Five steps, about twenty minutes
+> ### This proves per request, not per session
+>
+> Every number here compares one request sent twice. A live agent reacts to what
+> changed and may take a different number of turns, so a per-request saving is
+> **not** a session-level saving. Measuring that takes weeks of real traffic and
+> is what the gateway's audited holdout is for
+> (`GET /admin/v1/spend/quality-parity`).
+>
+> We lead with this because a small paired bench read as a session-level verdict
+> is how these conversations go wrong. If we ship a per-request tool, we call it
+> per-request.
 
-```
-1. Clone this repo             public, no account
-2. Paste SETUP-PROMPT.md       into your coding agent
-3. It captures your workloads  your prompts + the facts that matter
-4. node prove.mjs              the proof run
-5. node report.mjs             open report.html
-```
+---
 
-Steps 2 and 3 are the point: your own coding agent does the setup and the
-capture, so there's no wizard to babysit and **you** picked the workloads.
+## Quick start
 
-```sh
+```bash
 git clone https://github.com/anyrayHQ/proof-run.git
 cd proof-run
-cp .env.example .env          # gateway URL, client key, model, repeats
-# paste SETUP-PROMPT.md into Claude Code / Cursor / your agent of choice
-node prove.mjs
-node report.mjs && open report.html
+cp .env.example .env          # gateway URL, client key, model
 ```
 
-Requires Node 20+. No dependencies, no `npm install`, no account.
+Check the plumbing first — one cheap workload, six calls:
 
-### What it costs you
+```bash
+node prove.mjs --workload example-02
+```
 
-Each workload is **2 × `PROOF_REPEATS` provider calls on your bill** — six by
-default. Ten workloads is sixty calls. Three runs per arm is the default because
-a model's answer varies between identical runs, and one sample can't tell a real
-change from ordinary variation. Drop it to 1 for a smoke test; that's a smoke
-test, not a proof.
+Then capture your own traffic. Paste **[SETUP-PROMPT.md](./SETUP-PROMPT.md)** into
+Claude Code, Cursor, or whichever agent you already have open. It finds the
+prompts your project actually sends, works out what each answer must contain,
+scrubs anything sensitive, and stops for your review. It will not run the proof —
+you do that.
 
----
+```bash
+node prove.mjs                # the run
+node report.mjs               # writes report.html
+```
 
-## What it measures
+Node 20+. No `npm install`, no dependencies, no account beyond the client key you
+already have.
 
-### Cost is exact
+> **This spends your provider budget.** Each workload costs 2 × `PROOF_REPEATS`
+> calls — six by default. Ten workloads ≈ 60 calls. The run prints the count
+> before it starts.
 
-Input token counts come from the provider's own `usage` field on **both** runs.
+## What a run looks like
+
+```
+example-01-log-dump          18,940 →  7,210   62%  facts kept 3/3
+example-02-small-question       310 →    310    0%  facts kept 3/3
+example-03-tool-bloat         8,455 →  2,110   75%  facts kept 3/3
+
+1 — COST
+  input tokens   27,705 → 9,630   65% lower
+  at list price  $0.14 → $0.05
+
+2 — QUALITY
+  every required fact survived, in all 3 runs, on 3 of 3 checked workloads
+```
+
+One of the shipped examples saves nothing at all. That's deliberate: a short
+question has nothing worth removing, and you should see an honest 0% before you
+believe any of the other numbers.
+
+## And it has to be able to fail
+
+Pointed at a gateway that drops a required fact:
+
+```
+example-01-log-dump           9,036 →  2,892   68%  LOST FACTS (2/3 vs 3/3)
+  ! only missing after the trim: ECONNRESET
+```
+
+Note it still reports the cost win alongside. **Cheaper and worse is a real
+outcome and the tool says so.** A proof tool that cannot return a bad verdict is
+marketing, and an evaluator spots that in the first five minutes. The failure
+path is tested, not asserted — `npm test` runs the whole thing against a mock
+gateway in both states.
+
+## How the two numbers are made
+
+<details>
+<summary><strong>Cost — from the provider, not from us</strong></summary>
+
+<br>
+
+Input token counts come from your provider's own `usage` field on **both** runs.
 Identical bytes give an identical count, so the number is reproducible rather
-than estimated — and if the two repeats of one arm ever disagree, the run says
-so, because on identical input they shouldn't.
+than estimated — and if two repeats of one arm ever disagree, the run says so,
+because on identical input they shouldn't.
 
-Cached input is counted at full weight. Providers report cached tokens
-separately, and on Anthropic `input_tokens` *excludes* them — so reading that
-field alone would let a warm prompt cache show up as a saving we didn't earn.
-The headline count is every input-side token the provider reported:
+**Cached input is counted at full weight.** Providers report cached tokens
+separately, and the two dialects disagree about what their input field means:
+Anthropic's `input_tokens` *excludes* cached reads, while an OpenAI-compatible
+`prompt_tokens` already *contains* them. Getting that backwards moves the
+headline by the size of the cache, in our favour. Both shapes are pinned by
+tests built from live payloads.
 
-```
-billed input = uncached input + cache writes + cache reads
-```
+**Each run is cache-isolated.** A provider's prompt cache outlives a proof run,
+and it doesn't help both arms equally — Anyray adds the cache breakpoints, so
+the optimized body caches and the bypassed one doesn't. Run the proof twice
+inside the TTL and the second run's first call is already a hit. So every run
+stamps a unique id into both arms, defeating the cross-run cache while leaving
+the within-run repeats intact. It's disclosed in the output and it goes in both
+arms, so it cannot tilt the comparison. Disable with `--no-cache-isolation`.
 
-The run also alternates which arm goes first across repeats, so neither arm gets
-the warm side every time.
+</details>
 
-### Quality is your definition
+<details>
+<summary><strong>Quality — your definition, not ours</strong></summary>
 
-Each workload declares the facts a correct answer has to carry. After every run,
-the answer is checked for each one.
+<br>
+
+Each workload declares the facts a correct answer has to carry:
 
 ```json
 {
@@ -104,70 +158,66 @@ the answer is checked for each one.
 }
 ```
 
-A fact counts as surviving only if it appeared in **every** run of that arm —
-one good answer out of three is a coin landing our way, not survival.
+A fact counts as surviving only if it appeared in **every** run of that arm. One
+good answer out of three is a coin landing our way, not survival.
 
-**The asymmetry is the point.** A workload counts as a regression only when a
-fact survived **without** Anyray and stopped surviving **with** it. If both sides
-miss a fact, the model couldn't answer the question from that prompt in the first
-place, or the fact was written wrong — either way it isn't damage we caused, and
-the report says so instead of counting it. Without that rule, a badly written
-check reads as harm.
+**The asymmetry is the point.** A workload counts against us only when a fact
+survived **without** Anyray and stopped surviving **with** it. If both sides miss
+a fact, the model couldn't answer from that prompt in the first place — that
+isn't ours, and the report says so instead of counting it. Without that rule, a
+badly written check reads as harm we caused.
 
-When a trim does break something, the run names what was lost and exits non-zero:
+</details>
 
-```
-example-01-log-dump    9,036 → 2,892   68%  LOST FACTS (2/3 vs 3/3)
-  ! only missing with Anyray on: ECONNRESET
-```
+<details>
+<summary><strong>An optional second opinion</strong></summary>
 
-That path is tested, not assumed — `tests/end-to-end.test.mjs` runs the whole
-thing against a mock gateway in both states, and the regression case is what
-shows the quality check is load-bearing rather than decorative.
+<br>
 
-### An optional second opinion
-
-```sh
+```bash
 node judge.mjs
 ```
 
-Shows your own model both answers, shuffled and unlabelled, and asks which is
+Your own model reads both answers, shuffled and unlabelled, and says which is
 better or whether they tie. The judge is never told which side came from us, and
 the grading call runs with Anyray bypassed so we can't influence it. Ten
 workloads graded by one model is a small sample, and the report says so.
 
----
+</details>
+
+## What it answers
+
+| Question | Does this repo answer it? |
+| --- | :--- |
+| Does Anyray actually change my prompts? | **Yes** — the report names which strategies fired |
+| How many tokens does it take out? | **Yes** — exactly, from the provider's count |
+| What does that save me in dollars? | **Yes** — at published list rates |
+| Do the answers still contain what I need? | **Yes** — facts I declared, checked every run |
+| Would a human prefer the unoptimized answer? | **Indicative** — blind grading, small sample |
+| Does my whole agent session get cheaper? | **No** — use the gateway's audited holdout |
+
+## Your prompts stay yours
+
+Everything the setup prompt writes into `workloads/` is your own traffic, and
+`.gitignore` keeps all of it — plus `results.json` and `report.html`, which hold
+both models' answers — out of git. Nothing is sent anywhere except through the
+gateway your traffic already flows through.
 
 ## Files
 
 | | |
-|---|---|
-| `SETUP-PROMPT.md` | Paste into your coding agent. It does steps 2 and 3. |
+| --- | --- |
+| `SETUP-PROMPT.md` | Paste into your coding agent. It captures your workloads. |
 | `prove.mjs` | Both arms, both verdicts. The one command. |
 | `judge.mjs` | Optional blind grading. |
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
-| `workloads/` | Three worked examples. Yours land here and are **gitignored**. |
-| `.env.example` | Gateway, key, model, repeats. |
-
-One of the three examples (`example-02-small-question`) saves nothing at all.
-It's there on purpose: a short question has nothing worth removing, and you
-should see an honest 0% in your own report before you believe any of the other
-numbers.
-
-### Your prompts stay yours
-
-Everything the setup prompt writes into `workloads/` is your own traffic, and
-`.gitignore` keeps all of it — plus `results.json` and `report.html`, which hold
-both models' answers — out of git. Nothing leaves your machine except the
-requests you were going to send to your own gateway anyway.
-
----
+| `workloads/` | Three worked examples. Yours land here, gitignored. |
 
 ## Why this isn't in the benchmarks repo
 
 | | [`benchmarks`](https://github.com/anyrayHQ/benchmarks) | `proof-run` |
-|---|---|---|
+| --- | --- | --- |
 | Points at | the optimizer on `:8088` | your gateway |
 | Credential | admin token | a client key |
 | Payloads | synthetic, committed | yours, never committed |
@@ -177,13 +227,14 @@ requests you were going to send to your own gateway anyway.
 
 The value proposition is inverted. Benchmarks is credible *because* its results
 are committed and anyone gets the same numbers. This is credible *because* the
-numbers are yours alone. Want numbers you can check against ours?
-[anyrayHQ/benchmarks](https://github.com/anyrayHQ/benchmarks). Want numbers from
-your own traffic? You're in the right place.
-
----
+numbers are yours alone.
 
 ## Troubleshooting
+
+<details>
+<summary><strong>Common failures and what they mean</strong></summary>
+
+<br>
 
 **`missing ANYRAY_GATEWAY_URL` / `missing ANYRAY_API_KEY`** — copy
 `.env.example` to `.env` and fill it in.
@@ -191,10 +242,17 @@ your own traffic? You're in the right place.
 **`gateway 401` or `gateway 402`** — the key isn't valid for that gateway, or
 enrollment lapsed. `anyray-connect doctor --json` reports which.
 
-**Both arms report identical token counts on every workload** — the bypass
-header isn't reaching the optimizer, so you're measuring the same path twice.
-Check that the URL is your Anyray gateway and not the provider directly.
+**Every workload reports 0%** — check the Strategies column. Empty everywhere
+means nothing fired: either the workloads are the wrong shape (a single pasted
+log is one message; the eliding strategies target *agent* traffic, where the
+same observation comes back turn after turn), or that deployment has them
+disabled. A `stood down` note gives the gateway's own reason.
 
-**`repeats disagree on input tokens`** — something varied between two runs of
-the *same* arm that shouldn't have: a system prompt with a timestamp in it, or a
-non-deterministic gateway. Worth chasing before you trust the delta.
+**`repeats disagree on input tokens`** — something varied between two runs of the
+*same* arm that shouldn't have: a system prompt with a timestamp in it, or a
+non-deterministic provider. Worth chasing before you trust the delta.
+
+**`NOT MEASURED: the optimizer reported "timeout"`** — that request went through
+unoptimized, so the row is a measurement of nothing. Re-run it.
+
+</details>
