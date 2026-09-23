@@ -1,0 +1,14 @@
+{
+  "title": "A short question with nothing to trim",
+  "note": "This one is here on purpose. There is nothing in it worth removing, so the honest result is 0% saved — and you should see that in your own report before you believe any of the other numbers.",
+  "mustInclude": ["504", "gateway"],
+  "body": {
+    "temperature": 0,
+    "messages": [
+      {
+        "role": "user",
+        "content": "In one sentence: what does HTTP status 504 mean, and which component reports it?"
+      }
+    ]
+  }
+}

@@ -1,0 +1,577 @@
+{
+  "title": "One question in front of a large tool catalogue",
+  "note": "The shape an MCP-connected agent sends every turn: eighteen tool schemas in front of one short question. Replace the tools with your own catalogue.",
+  "mustInclude": [
+    "search_logs",
+    "payments-api"
+  ],
+  "body": {
+    "temperature": 0,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "search_issues",
+          "description": "Search the issue tracker by text query, label, assignee, milestone, or state.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_issue",
+          "description": "Fetch a single issue with its full body, labels, and comment thread.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "create_issue",
+          "description": "Open a new issue in a repository with a title, body, labels and assignees.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "update_issue",
+          "description": "Change an existing issue: title, body, state, labels, assignees or milestone.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_pull_requests",
+          "description": "List pull requests filtered by state, base branch, head branch or author.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_pull_request",
+          "description": "Fetch one pull request with its diff stat, review state and check runs.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "merge_pull_request",
+          "description": "Merge a pull request using merge, squash or rebase.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_deployments",
+          "description": "List deployments for an environment with status, actor and commit sha.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "create_deployment",
+          "description": "Trigger a deployment of a ref to a named environment.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "rollback_deployment",
+          "description": "Roll an environment back to a previously deployed sha.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "query_metrics",
+          "description": "Query the time-series metrics store with a PromQL expression over a window.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_alerts",
+          "description": "List firing and recently resolved alerts for a service or team.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "silence_alert",
+          "description": "Silence an alert rule for a duration with a required justification.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "search_logs",
+          "description": "Full-text search over service logs with a time range and severity filter.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "tail_logs",
+          "description": "Stream recent log lines for one service and pod.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_incidents",
+          "description": "List incidents by severity, service, state or commander.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_runbook",
+          "description": "Fetch the runbook document attached to a service or alert rule.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "page_oncall",
+          "description": "Page the current on-call engineer for a service with a short summary.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "service": {
+                "type": "string",
+                "description": "Service name, e.g. payments-api."
+              },
+              "query": {
+                "type": "string",
+                "description": "Free-text query or expression."
+              },
+              "window": {
+                "type": "string",
+                "description": "Relative time window such as 15m, 6h or 7d."
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Maximum results to return."
+              }
+            },
+            "required": [
+              "service"
+            ]
+          }
+        }
+      }
+    ],
+    "messages": [
+      {
+        "role": "user",
+        "content": "The payments-api service is throwing 5xx errors. Name the single tool from the catalogue you would call first to find the cause, and say which service you would point it at. Do not call it \u2014 just name it."
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "anyray-proof-run",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Point it at your gateway, run your own prompts twice, and read two verdicts: what it costs, and whether the answers still hold.",
+  "scripts": {
+    "prove": "node prove.mjs",
+    "judge": "node judge.mjs",
+    "report": "node report.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

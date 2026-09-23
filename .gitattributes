@@ -1,0 +1,6 @@
+# Keep line endings LF everywhere so the scripts run on Linux/macOS regardless
+# of the contributor's core.autocrlf setting.
+* text=auto eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf

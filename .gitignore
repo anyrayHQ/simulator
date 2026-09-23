@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Gateway URL and client key.
+.env
+
+# YOUR WORKLOADS ARE YOURS. Everything the setup prompt writes into workloads/
+# is your own traffic — real prompts, real file contents, real ticket numbers —
+# and none of it belongs in a git history. Only the shipped examples are tracked.
+workloads/*
+!workloads/example-*.json
+
+# Run outputs: they contain your prompts AND both models' answers.
+results.json
+report.html
+judge.json
+
+# macOS
+.DS_Store

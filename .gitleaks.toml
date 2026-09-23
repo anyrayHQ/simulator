@@ -1,0 +1,22 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "anyray-client-key"
+description = "Anyray client key"
+regex = '''\bark_(svc_)?[A-Za-z0-9_-]{16,}'''
+keywords = ["ark_"]
+
+[[rules]]
+id = "anyray-enrollment-token"
+description = "Anyray enrollment or admin token"
+regex = '''\b(enl|adt)_[A-Za-z0-9_-]{16,}'''
+keywords = ["enl_", "adt_"]
+
+[allowlist]
+description = "Placeholders in documentation and examples"
+regexes = [
+  '''ark_your_client_key_here''',
+  '''ark_test_key''',
+  '''ark_demo''',
+]
