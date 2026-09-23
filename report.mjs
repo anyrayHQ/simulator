@@ -156,7 +156,12 @@ function costPanel(s) {
     <span class="eyebrow">1 — Cost</span>
     <p class="headline">${n(cost.before)} → ${n(cost.after)}<br><span class="pass">${cost.savedPct}% lower</span></p>
     <p class="basis">Input tokens, counted by the provider's own <code>usage</code> field on both runs — not estimated here.${
-      cost.priced
+      // `priced` and the dollar figures are computed together by summarize(),
+      // but this file re-renders whatever results.json holds — including a file
+      // that was hand-edited or written by an older build. Require BOTH before
+      // printing money, so a stale or doctored `priced: true` cannot put a
+      // dollar figure under a model nobody published a rate for.
+      cost.priced && cost.beforeUSD != null && cost.afterUSD != null
         ? ` At published list price for <code>${esc(s.model)}</code>: <strong>${fmtUSD(cost.beforeUSD)} → ${fmtUSD(cost.afterUSD)}</strong>.`
         : ` No published rate for <code>${esc(s.model)}</code> in rates.json, so tokens only.`
     }</p>

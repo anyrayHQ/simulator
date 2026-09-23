@@ -221,3 +221,70 @@ test('--redact removes every verbatim string from the customer, and says what it
   for (const secret of ['ECONNRESET', 'payments-api']) assert.ok(full.includes(secret));
   assert.ok(full.includes('Both answers'));
 });
+
+test('the report is model-agnostic, and never prints money it does not have', async () => {
+  const { renderReport } = await import('../report.mjs');
+  const row = {
+    id: 'w1', title: null,
+    bypassed: { billedInput: 9036, cacheRead: 0, cacheWrite: 0, uncachedInput: 9036, output: 50 },
+    optimized: { billedInput: 2892, cacheRead: 0, cacheWrite: 0, uncachedInput: 2892, output: 50 },
+    savedPct: 68,
+    facts: { total: 2, bypassedKept: 2, optimizedKept: 2, lost: [], missingBoth: [], recovered: [], regression: false, inconclusive: false, truncated: false },
+    strategies: ['context_compression'], optimizeStatus: 'applied', optimizeNotes: [], suppressed: [],
+    inconsistent: { bypassed: null, optimized: null }, errors: [],
+    answers: { bypassed: 'a', optimized: 'b' },
+  };
+  const make = (model, cost) => ({
+    ranAt: '2026-09-23T00:00:00.000Z', gatewayUrl: 'https://gw.example.com', model,
+    endpoint: '/v1/chat/completions', repeats: 3,
+    summary: {
+      model, repeats: 3, rows: [row],
+      cost: { before: 9036, after: 2892, savedPct: 68, cacheState: 'none', usdSavedPct: 68, notMeasured: 0, ...cost },
+      quality: { checked: 1, clean: 1, regressions: [], inconclusive: [] },
+      errors: [],
+    },
+  });
+
+  // Any model id renders; nothing in the page is Claude-shaped.
+  for (const model of ['gpt-5', 'gemini-2.5-pro', 'o4-mini', 'claude-sonnet-4-5', 'acme/internal-7b']) {
+    const html = renderReport(make(model, { priced: true, beforeUSD: 0.07, afterUSD: 0.02 }));
+    assert.ok(html.includes(model.replace('/', '/')), `${model} missing from the report`);
+    assert.ok(html.includes('68%'));
+  }
+
+  // An unpriced model says so instead of inventing a figure.
+  const unpriced = renderReport(make('acme-internal-7b', { priced: false, beforeUSD: null, afterUSD: null }));
+  assert.match(unpriced, /No published rate for/);
+  assert.ok(!/\$\d/.test(unpriced.split('1 — Cost')[1].split('</section>')[0]), 'printed a dollar figure with no rate');
+
+  // A results.json that claims priced:true but carries no figures — hand-edited,
+  // or written by an older build — must still not print money.
+  const doctored = renderReport(make('acme-internal-7b', { priced: true, beforeUSD: null, afterUSD: null }));
+  assert.match(doctored, /No published rate for/);
+  assert.ok(!doctored.includes('$null') && !doctored.includes('$NaN'));
+});
+
+test('a body that already caps its answer is not given a second, wrong cap', async () => {
+  // OpenAI's reasoning models reject `max_tokens` and require
+  // `max_completion_tokens`. A customer's body is already correct for their
+  // own provider; adding our spelling on top would 400 it.
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(JSON.parse(init.body));
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ choices: [{ message: { content: 'ok' } }], usage: {} }), text: async () => '' };
+  };
+  const cfg = { gatewayUrl: 'https://gw', apiKey: 'k', model: 'o4-mini', endpoint: '/v1/chat/completions', maxTokens: 1024, timeoutMs: 5000 };
+
+  await callGateway(cfg, { messages: [{ role: 'user', content: 'hi' }], max_completion_tokens: 256 }, { optimize: 'on', fetchImpl });
+  assert.equal(calls[0].max_completion_tokens, 256);
+  assert.equal(calls[0].max_tokens, undefined, 'added max_tokens next to max_completion_tokens');
+
+  await callGateway(cfg, { messages: [{ role: 'user', content: 'hi' }], max_output_tokens: 99 }, { optimize: 'on', fetchImpl });
+  assert.equal(calls[1].max_output_tokens, 99);
+  assert.equal(calls[1].max_tokens, undefined);
+
+  // With no ceiling of their own, ours applies — a runaway generation should
+  // not be able to dominate their bill.
+  await callGateway(cfg, { messages: [{ role: 'user', content: 'hi' }] }, { optimize: 'on', fetchImpl });
+  assert.equal(calls[2].max_tokens, 1024);
+});
