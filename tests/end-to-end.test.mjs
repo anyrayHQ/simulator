@@ -32,7 +32,7 @@ function startMock(mode) {
   });
 }
 
-function proveAgainst(url, { expectFailure = false } = {}) {
+function proveAgainst(url, { expectFailure = false, args = [] } = {}) {
   const out = join(mkdtempSync(join(tmpdir(), 'proof-')), 'results.json');
   const env = {
     ...process.env,
@@ -43,7 +43,7 @@ function proveAgainst(url, { expectFailure = false } = {}) {
   };
   let stdout = '';
   try {
-    stdout = execFileSync('node', ['prove.mjs', '--out', out], { cwd: root, env, encoding: 'utf8' });
+    stdout = execFileSync('node', ['prove.mjs', '--out', out, ...args], { cwd: root, env, encoding: 'utf8' });
     assert.equal(expectFailure, false, 'expected a non-zero exit on a lost fact');
   } catch (e) {
     // exit 2 is the documented "a required fact was lost" status.
@@ -297,4 +297,24 @@ test('a resumed run will not splice two different configurations together', asyn
   assert.match(stdout, /Starting fresh rather than mixing two runs/);
   assert.ok(!/Resuming/.test(stdout));
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('the mock recognises every shipped workload', async (t) => {
+  // A mock that returns no facts for a workload makes every run against it
+  // meaningless while looking like it worked: the arms come back identical, the
+  // row reads 0%, and nothing fails. Caught when example-04 and 05 were added
+  // to workloads/ but not to the mock's answer key.
+  const { url, stop } = await startMock('healthy');
+  t.after(stop);
+  const { results } = proveAgainst(url, { args: ['--examples'] });
+  for (const r of results.results) {
+    const answer = r.bypassedRuns.find((x) => !x.error)?.answer ?? '';
+    assert.ok(
+      !/could not determine/i.test(answer),
+      `${r.id}: the mock had no answer key, so this workload proves nothing`
+    );
+  }
+  // And with an answer key present, the trimmable ones must actually save.
+  const trimmed = results.summary.rows.filter((r) => r.id !== 'example-02-small-question');
+  assert.ok(trimmed.every((r) => r.savedPct > 0), 'a trimmable workload reported no saving');
 });

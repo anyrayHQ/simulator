@@ -18,14 +18,21 @@ const FACTS = {
   'example-01-log-dump': ['ECONNRESET', 'payments-api', 'ord_88412'],
   'example-02-small-question': ['504', 'gateway'],
   'example-03-tool-bloat': ['search_logs', 'payments-api'],
+  'example-04-agent-reruns': ['ord_88412', 'payments-api', 'ECONNRESET'],
+  'example-05-agent-retrieval': ['ord_88412', 'payments-api', 'ECONNRESET'],
 };
 
 /** Which workload this body came from, by looking for its distinctive marker. */
+// Order matters: the agent-shaped workloads also contain ord_88412, so the
+// cheapest marker must not win. A mock that silently returns no facts for a
+// workload makes every run against it meaningless while looking like it worked.
 function identify(body) {
   const text = JSON.stringify(body);
-  if (text.includes('ord_88412')) return 'example-01-log-dump';
-  if (text.includes('HTTP status 504')) return 'example-02-small-question';
+  if (text.includes('anyray_retrieve')) return 'example-05-agent-retrieval';
+  if (text.includes('kubectl logs deploy/checkout')) return 'example-04-agent-reruns';
   if (text.includes('tool from the catalogue')) return 'example-03-tool-bloat';
+  if (text.includes('HTTP status 504')) return 'example-02-small-question';
+  if (text.includes('ord_88412')) return 'example-01-log-dump';
   return 'unknown';
 }
 

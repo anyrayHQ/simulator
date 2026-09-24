@@ -205,11 +205,11 @@ function qualityPanel(s, redact) {
   </section>`;
 }
 
-function tableRows(rows, redact) {
+function tableRows(rows, redact, hasDirect) {
   return rows
     .map((r) => {
       if (!r.bypassed || !r.optimized) {
-        return `<tr><td><code>${esc(r.id)}</code></td><td colspan="5" class="flag">${esc(r.errors[0] ?? 'no successful runs')}</td></tr>`;
+        return `<tr><td><code>${esc(r.id)}</code></td><td colspan="${hasDirect ? 6 : 5}" class="flag">${esc(r.errors[0] ?? 'no successful runs')}</td></tr>`;
       }
       const flags = [];
       // A required fact is a verbatim string out of the customer's own data —
@@ -242,6 +242,7 @@ function tableRows(rows, redact) {
           : `<span class="pass">${r.facts.optimizedKept}/${r.facts.total}</span>`;
       return `<tr class="${r.facts.regression ? 'regressed' : ''}">
         <td><code>${esc(r.id)}</code>${flags.join('')}</td>
+        ${hasDirect ? `<td class="num">${n(r.direct?.billedInput)}</td>` : ''}
         <td class="num">${n(r.bypassed.billedInput)}</td>
         <td class="num">${n(r.optimized.billedInput)}</td>
         <td class="num">${r.savedPct}%</td>
@@ -320,6 +321,19 @@ export function renderReport(data, { redact = false } = {}) {
     ${qualityPanel(s, redact)}
   </div>
 
+  ${
+    s.proxyCheck
+      ? `<section class="caveat ${s.proxyCheck.identical ? '' : 'redacted'}">
+    <p><strong>Is the bypassed arm really a baseline?</strong></p>
+    ${
+      s.proxyCheck.identical
+        ? `<p>Yes. On all ${s.proxyCheck.workloads} workload(s), a call straight to your provider — no Anyray in the path at all — reported the <strong>same</strong> input tokens as the call through Anyray with optimization off. The proxy forwards your bytes unaltered, so the saving above is measured against a clean control.</p>`
+        : `<p>No. Direct ${n(s.proxyCheck.direct)} vs bypassed ${n(s.proxyCheck.bypassed)} — a difference of ${n(s.proxyCheck.delta)} tokens introduced by the proxy itself. The saving above is measured against that baseline, so read it with this in mind.</p>`
+    }
+  </section>`
+      : ''
+  }
+
   <section>
     <h2>Per workload</h2>
     <p class="eyebrow section-note">Same model, same key, same path. One header is the only difference.</p>
@@ -329,7 +343,7 @@ export function renderReport(data, { redact = false } = {}) {
           <th>Workload</th><th class="num">Anyray off</th><th class="num">Anyray on</th>
           <th class="num">Saved</th><th class="num">Facts kept</th><th>Strategies</th>
         </tr></thead>
-        <tbody>${tableRows(s.rows, redact)}</tbody>
+        <tbody>${tableRows(s.rows, redact, Boolean(s.proxyCheck))}</tbody>
       </table>
     </div>
   </section>
