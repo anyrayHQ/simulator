@@ -288,3 +288,53 @@ test('a body that already caps its answer is not given a second, wrong cap', asy
   await callGateway(cfg, { messages: [{ role: 'user', content: 'hi' }] }, { optimize: 'on', fetchImpl });
   assert.equal(calls[2].max_tokens, 1024);
 });
+
+test('the direct arm never borrows an ambient, gateway-routed key', async () => {
+  // On an enrolled machine ANTHROPIC_API_KEY / OPENAI_API_KEY are part of the
+  // Anyray routing. Borrowing one is how a "direct" control ends up going
+  // through the gateway and proves nothing while looking rigorous — the lab
+  // documents hitting exactly this.
+  const { resolveDirect } = await import('../lib/env.mjs');
+  assert.equal(resolveDirect({}, 'm'), null, 'direct arm must be opt-in');
+  assert.equal(
+    resolveDirect({ ANTHROPIC_API_KEY: 'sk-ant-ambient' }, 'm'),
+    null,
+    'an ambient provider key must not silently enable the direct arm'
+  );
+  assert.throws(
+    () => resolveDirect({ DIRECT_BASE_URL: 'https://api.anthropic.com', ANTHROPIC_API_KEY: 'sk-ant-x' }, 'm'),
+    /DIRECT_API_KEY/,
+    'must demand its own key rather than borrowing the ambient one'
+  );
+  // And it must refuse to call an Anyray host "direct".
+  assert.throws(
+    () => resolveDirect({ DIRECT_BASE_URL: 'https://gateway.anyray.ai', DIRECT_API_KEY: 'k' }, 'm'),
+    /must bypass Anyray entirely/
+  );
+  const ok = resolveDirect({ DIRECT_BASE_URL: 'https://api.anthropic.com/', DIRECT_API_KEY: 'sk-ant-x' }, 'claude-sonnet-4-5');
+  assert.equal(ok.dialect, 'anthropic');
+  assert.equal(ok.endpoint, '/v1/messages');
+  assert.equal(ok.model, 'claude-sonnet-4-5');
+});
+
+test('a direct call carries no Anyray header and provider-shaped auth', async () => {
+  const { callDirect } = await import('../lib/gateway.mjs');
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, headers: init.headers });
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ choices: [{ message: { content: 'x' } }], usage: { prompt_tokens: 5 } }), text: async () => '' };
+  };
+  await callDirect(
+    { providerUrl: 'https://api.anthropic.com', apiKey: 'sk-ant-x', dialect: 'anthropic', endpoint: '/v1/messages', model: 'm' },
+    { messages: [{ role: 'user', content: 'hi' }] },
+    { maxTokens: 64, timeoutMs: 5000, fetchImpl }
+  );
+  const h = calls[0].headers;
+  assert.equal(h['x-api-key'], 'sk-ant-x');
+  assert.equal(h['anthropic-version'], '2023-06-01');
+  // Nothing of ours may ride along, or it is not a direct call.
+  for (const k of Object.keys(h)) {
+    assert.ok(!/^x-anyray/i.test(k), `direct call carried ${k}`);
+  }
+  assert.ok(calls[0].url.startsWith('https://api.anthropic.com'));
+});

@@ -13,7 +13,7 @@
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
 import { loadWorkloads, stampRunId, newRunId } from './lib/workloads.mjs';
-import { callGateway } from './lib/gateway.mjs';
+import { callGateway, callDirect } from './lib/gateway.mjs';
 import { normalizeUsage } from './lib/usage.mjs';
 import { loadRates } from './lib/rates.mjs';
 import { summarize, renderRow, renderVerdicts } from './lib/verdict.mjs';
@@ -113,7 +113,15 @@ export function firstCallHint(error, cfg) {
  *  workload should not throw away the rest of a run you are paying for. */
 async function runOnce(cfg, wl, optimize) {
   try {
-    const r = await callGateway(cfg, wl.body, { optimize });
+    // 'direct' is not a gateway mode — it is a different destination. Routing
+    // it through callGateway would send an unrecognised optimize value, which
+    // means no bypass header, which means the "direct" arm silently measures an
+    // OPTIMIZED call. That is the ambient-routing defect the lab warns about,
+    // arriving through a typo instead of an env var.
+    const r =
+      optimize === 'direct'
+        ? await callDirect(cfg.direct, wl.body, { maxTokens: cfg.maxTokens, timeoutMs: cfg.timeoutMs })
+        : await callGateway(cfg, wl.body, { optimize });
     return {
       optimize,
       answer: r.answer,
@@ -256,11 +264,16 @@ async function main() {
     const wl = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
     const bypassedRuns = [];
     const optimizedRuns = [];
+    const directRuns = [];
     for (let i = 0; i < cfg.repeats; i++) {
       // Alternate which arm goes first. Whichever runs first pays to warm the
       // provider's prompt cache; alternating keeps that cost from landing on the
       // same arm every time and biasing the comparison.
       const order = i % 2 === 0 ? ['off', 'on'] : ['on', 'off'];
+      // The direct arm, when configured, runs alongside — not instead of — the
+      // bypassed one. Its whole job is to be COMPARED to the bypassed arm, so
+      // dropping either would defeat the point.
+      if (cfg.direct) order.push('direct');
       for (const arm of order) {
         const run = await runOnce(cfg, wl, arm);
         // If the very first call fails, the config is wrong, not the workload.
@@ -272,13 +285,14 @@ async function main() {
           );
         }
         firstCall = false;
-        (arm === 'off' ? bypassedRuns : optimizedRuns).push(run);
+        if (arm === 'direct') directRuns.push(run);
+        else (arm === 'off' ? bypassedRuns : optimizedRuns).push(run);
         if (run.error) console.error(`  ${wl.id} [anyray ${arm}] failed: ${run.error}`);
       }
     }
     // `body` rides along so judge.mjs can quote the question back to the judge
     // without re-reading workloads/ (which the customer may have moved on from).
-    const res = { id: wl.id, title: wl.title, mustInclude: wl.mustInclude, body: wl.body, bypassedRuns, optimizedRuns };
+    const res = { id: wl.id, title: wl.title, mustInclude: wl.mustInclude, body: wl.body, bypassedRuns, optimizedRuns, directRuns };
     results.push(res);
     const summary = summarize({ results: [res], model: cfg.model, rates, repeats: cfg.repeats });
     if (showProgress) process.stdout.write('\r' + ' '.repeat(72) + '\r');

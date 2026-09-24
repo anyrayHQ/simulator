@@ -183,6 +183,33 @@ workloads graded by one model is a small sample, and the report says so.
 
 </details>
 
+## "But your baseline still goes through your proxy"
+
+It does, and that is a fair objection: the bypassed arm sends
+`x-anyray-optimize: off` through the same gateway, so it measures *Anyray
+forwarding unchanged*, not *no Anyray*.
+
+That is not answerable by argument, so the repo measures it. Set
+`DIRECT_BASE_URL` and `DIRECT_API_KEY` in `.env` and every workload gets a third
+call, straight to your provider with nothing of ours in the path. The run then
+reports whether the two baselines agree:
+
+```
+   Is the bypassed arm really a baseline?
+   Yes — on all 6 workload(s) a direct call to your provider reported the SAME
+   input tokens (27,705) as the call through Anyray with optimization off.
+   The proxy forwards your bytes unaltered.
+```
+
+and when they do not agree, it says that instead, with the per-workload deltas —
+because a baseline that is not clean makes every saving above it suspect, and
+you should hear that from the tool rather than discover it yourself.
+
+It costs one extra call per repeat per workload, and it needs your own provider
+key. That key is a separate variable on purpose: on a machine enrolled with
+Anyray, `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are part of the routing, so
+borrowing one would quietly make the "direct" arm a second gateway arm.
+
 ## Does it work on models other than Claude?
 
 Yes. Nothing in the measurement is Claude-specific — it reads whichever dialect
