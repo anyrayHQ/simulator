@@ -90,7 +90,11 @@ test('dropping gateway: names the lost fact and exits non-zero', async (t) => {
 
   assert.ok(s.quality.regressions.length > 0, 'the dropping gateway must be caught');
   assert.ok(stdout.includes('LOST FACTS'));
-  assert.ok(stdout.includes('only missing with Anyray on'));
+  assert.ok(stdout.includes('only missing after the trim'), stdout);
+  // The terminal and the HTML report must describe the same finding the same
+  // way — one saying "with Anyray on" while the other says "after the trim"
+  // reads as two different claims to anyone holding both.
+  assert.ok(!/only missing with Anyray on/.test(stdout), 'terminal wording drifted from the report');
 
   const row = s.rows.find((r) => r.id === 'example-01-log-dump');
   assert.deepEqual(row.facts.lost, ['ECONNRESET']);

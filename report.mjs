@@ -197,7 +197,7 @@ function qualityPanel(s, redact) {
   return `<section class="verdict">
     <span class="eyebrow">2 — Quality</span>
     <p class="headline pass">${q.clean} of ${q.checked}<br>facts intact</p>
-    <p class="basis">Every fact these workloads declared as required survived, in all ${s.repeats} run${s.repeats === 1 ? '' : 's'} with Anyray on.${
+    <p class="basis">Every fact these workloads declared as required survived, in all ${s.repeats} run${s.repeats === 1 ? '' : 's'} with Anyray in the path.${
       q.inconclusive.length
         ? ` ${q.inconclusive.length} further workload(s) are not counted: the answer missed a required fact without Anyray too.`
         : ''
