@@ -19,3 +19,9 @@ judge.json
 
 # macOS
 .DS_Store
+
+# The LangGraph session experiment has its own venv and results.
+experiments/**/.venv/
+experiments/**/.env
+experiments/**/results.json
+experiments/**/__pycache__/

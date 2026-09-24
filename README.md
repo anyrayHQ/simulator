@@ -210,6 +210,23 @@ key. That key is a separate variable on purpose: on a machine enrolled with
 Anyray, `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are part of the routing, so
 borrowing one would quietly make the "direct" arm a second gateway arm.
 
+## Per session, not just per request
+
+The caveat above is a real limit, so the repo ships the other measurement too —
+separately, because it answers a different question and is not part of this
+tool's claim.
+
+[`experiments/langgraph-session/`](./experiments/langgraph-session/) runs a
+LangGraph agent against the same two destinations and lets it run until it
+decides it is done, so **turns are an outcome**. That is what a paired bench
+cannot produce, and it is where a per-call saving and a per-session saving can
+disagree: if the optimizer removes context the agent then goes back for, tokens
+per call fall while turns rise.
+
+It is Python, has its own dependencies and its own venv, and needs your own
+provider key for the direct arm. Nothing at this level requires any of that —
+the root stays dependency-free.
+
 ## Does it work on models other than Claude?
 
 Yes. Nothing in the measurement is Claude-specific — it reads whichever dialect
