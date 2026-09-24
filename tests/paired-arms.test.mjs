@@ -338,3 +338,44 @@ test('a direct call carries no Anyray header and provider-shaped auth', async ()
   }
   assert.ok(calls[0].url.startsWith('https://api.anthropic.com'));
 });
+
+test('the report table has as many header cells as body cells', async () => {
+  // A header built separately from the rows drifts silently: adding the Direct
+  // column to the body without the header shifted every value one place left,
+  // so "Anyray off" displayed the direct count and "Saved" displayed facts.
+  // The page still rendered. Nothing failed.
+  const { renderReport } = await import('../report.mjs');
+  const row = (withDirect) => ({
+    id: 'w1', title: null,
+    direct: withDirect ? { billedInput: 100, cacheRead: 0, cacheWrite: 0, uncachedInput: 100, output: 5 } : null,
+    bypassed: { billedInput: 100, cacheRead: 0, cacheWrite: 0, uncachedInput: 100, output: 5 },
+    optimized: { billedInput: 40, cacheRead: 0, cacheWrite: 0, uncachedInput: 40, output: 5 },
+    savedPct: 60,
+    facts: { total: 1, bypassedKept: 1, optimizedKept: 1, lost: [], missingBoth: [], recovered: [], regression: false, inconclusive: false, truncated: false },
+    strategies: [], optimizeStatus: 'applied', optimizeNotes: [], suppressed: [],
+    inconsistent: { bypassed: null, optimized: null }, errors: [],
+    answers: { bypassed: 'a', optimized: 'b' },
+  });
+  const make = (proxyCheck) => ({
+    ranAt: '2026-09-24T00:00:00.000Z', gatewayUrl: 'https://gw', model: 'claude-sonnet-4-5',
+    endpoint: '/v1/chat/completions', repeats: 1,
+    summary: {
+      model: 'claude-sonnet-4-5', repeats: 1, rows: [row(Boolean(proxyCheck))], proxyCheck,
+      cost: { before: 100, after: 40, savedPct: 60, priced: true, beforeUSD: 0.01, afterUSD: 0.004, cacheState: 'none', usdSavedPct: 60, notMeasured: 0 },
+      quality: { checked: 1, clean: 1, regressions: [], inconclusive: [] },
+      errors: [],
+    },
+  });
+  const count = (html, tag) => (html.match(new RegExp(`<${tag}[ >]`, 'g')) ?? []).length;
+
+  for (const proxyCheck of [null, { workloads: 1, direct: 100, bypassed: 100, delta: 0, identical: true, rows: [] }]) {
+    const html = renderReport(make(proxyCheck));
+    const head = html.split('<thead>')[1].split('</thead>')[0];
+    const body = html.split('<tbody>')[1].split('</tbody>')[0];
+    assert.equal(
+      count(head, 'th'),
+      count(body, 'td'),
+      `header/body column mismatch with proxyCheck=${Boolean(proxyCheck)}`
+    );
+  }
+});

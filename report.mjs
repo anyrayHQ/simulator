@@ -340,7 +340,7 @@ export function renderReport(data, { redact = false } = {}) {
     <div class="scroll">
       <table>
         <thead><tr>
-          <th>Workload</th><th class="num">Anyray off</th><th class="num">Anyray on</th>
+          <th>Workload</th>${s.proxyCheck ? '<th class="num">Direct</th>' : ''}<th class="num">Anyray off</th><th class="num">Anyray on</th>
           <th class="num">Saved</th><th class="num">Facts kept</th><th>Strategies</th>
         </tr></thead>
         <tbody>${tableRows(s.rows, redact, Boolean(s.proxyCheck))}</tbody>
