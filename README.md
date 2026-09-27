@@ -245,6 +245,25 @@ Two things to know:
   gap. Add yours to `rates.json` if it is missing; the percentage saved does not
   depend on it.
 
+## Retrieval, and why your real number may be higher
+
+Anyray will not remove a span unless it can prove the client could fetch it back
+— a tool matching `anyray_retrieve`. Without that proof it deliberately stands
+down rather than risk a trim nothing can undo, and the report prints the
+gateway's own reason.
+
+**This harness sends one request and reads one answer, so it cannot honour a
+retrieval tool** — and the shipped workloads therefore do not declare one. If
+they did, the optimizer would elide spans expecting a fetch that never comes, the
+model would reply *"I need to retrieve the omitted lines"*, and the run would
+report a fact loss we did not cause. It detects that case and declines to judge
+rather than blaming us, but the cleaner answer is not to claim the capability.
+
+So the saving measured here is **what a non-retrieval client gets**. The savings
+that do survive — deduplicating repeated tool observations, restructuring for
+cacheability — are the ones that need no handle. A real Anyray-routed agent with
+the MCP tools registered is retrieval-capable and sees more than this.
+
 ## What it answers
 
 | Question | Does this repo answer it? |

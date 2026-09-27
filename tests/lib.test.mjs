@@ -335,3 +335,33 @@ test('rates cover the non-Claude models the gateway can route to', async () => {
   // rate — over-pricing over-states the saving.
   assert.equal(rateFor(r, 'totally-made-up-7b'), null);
 });
+
+test('a tool call is not an answer, and is never scored as a lost fact', async () => {
+  // Observed live. The optimizer elided a span behind a ctx_ handle; the model
+  // did the correct thing and called anyray_retrieve to fetch it back, so the
+  // visible text was "I need to retrieve the omitted lines" with
+  // finish_reason: "tool_calls". Scoring that as the final answer marked all
+  // three required facts missing and reported LOST FACTS against us — a false
+  // accusation caused by this harness sending one request and never answering
+  // the model's question.
+  const { compareArms, wantedATool } = await import('../lib/facts.mjs');
+  assert.ok(wantedATool({ finishReason: 'tool_calls' }));
+  assert.ok(wantedATool({ finishReason: 'tool_use' }));
+  assert.ok(!wantedATool({ finishReason: 'stop' }));
+
+  const r = compareArms({
+    bypassedRuns: [{ answer: 'Order ord_88412 failed against payments-api with ECONNRESET.', finishReason: 'stop' }],
+    optimizedRuns: [{ answer: 'I need to retrieve the omitted lines.', finishReason: 'tool_calls' }],
+    mustInclude: ['ECONNRESET', 'payments-api', 'ord_88412'],
+  });
+  assert.equal(r.regression, false, 'an unanswered tool call must never read as a regression');
+  assert.equal(r.inconclusive, true);
+
+  // A genuine loss, both arms answering properly, still reports.
+  const real = compareArms({
+    bypassedRuns: [{ answer: 'ECONNRESET on payments-api for ord_88412', finishReason: 'stop' }],
+    optimizedRuns: [{ answer: 'Something failed for ord_88412', finishReason: 'stop' }],
+    mustInclude: ['ECONNRESET', 'payments-api', 'ord_88412'],
+  });
+  assert.equal(real.regression, true);
+});

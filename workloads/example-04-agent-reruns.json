@@ -1,6 +1,6 @@
 {
   "title": "An agent that re-ran the same command six times",
-  "note": "The shape that dominates real coding-agent traffic: the same observation pulled back turn after turn. This is what context_dedupe and context_compression exist for — a single pasted log is NOT that shape, which is why the smaller examples here report 0%.",
+  "note": "The shape that dominates real coding-agent traffic: the same observation pulled back turn after turn, which is what context_dedupe exists for. It deliberately does NOT declare anyray_retrieve: this harness sends one request and cannot answer a tool call, so claiming retrieval it cannot honour makes the optimizer elide spans nothing will fetch back. The saving here is therefore what a NON-retrieval client gets — a retrieval-capable agent sees more.",
   "mustInclude": [
     "ord_88412",
     "payments-api",

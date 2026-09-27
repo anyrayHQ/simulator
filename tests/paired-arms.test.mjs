@@ -379,3 +379,50 @@ test('the report table has as many header cells as body cells', async () => {
     );
   }
 });
+
+test('a 502 while asking for the decisions header drops the ask and retries', async () => {
+  // x-anyray-test also emits x-anyray-optimization-content on a plaintext-mode
+  // deployment, and that header carries the literal before/after prompt TEXT:
+  // 26,599 bytes of response header on a ~6k-token workload. Past roughly 12k
+  // tokens the header block exceeds what the proxy will pass and the request
+  // dies with a bare 502 in ~3s, while the identical payload without the header
+  // returns 200. Measured on gateway.anyray.ai; it was failing two shipped
+  // examples outright.
+  const { callGateway: call, resetDecisionsHeader } = await import('../lib/gateway.mjs');
+  resetDecisionsHeader();
+  const seen = [];
+  let calls = 0;
+  const fetchImpl = async (url, init) => {
+    seen.push(init.headers);
+    calls++;
+    // 502 only while the test header is present — exactly the live behaviour.
+    if (init.headers['x-anyray-test']) {
+      return { ok: false, status: 502, headers: { get: () => null }, text: async () => '<html>502</html>' };
+    }
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ choices: [{ message: { content: 'ok' } }], usage: { prompt_tokens: 10 } }), text: async () => '' };
+  };
+  const cfg = { gatewayUrl: 'https://gw', apiKey: 'k', model: 'm', endpoint: '/v1/chat/completions', maxTokens: 64, timeoutMs: 5000 };
+
+  // The measurement must survive: one 502, then a clean retry without the ask.
+  const r = await call(cfg, { messages: [{ role: 'user', content: 'hi' }] }, { optimize: 'on', fetchImpl });
+  assert.equal(r.answer, 'ok', 'the retry must return the measurement, not throw');
+  assert.equal(calls, 2);
+  assert.equal(seen[0]['x-anyray-test'], '1');
+  assert.equal(seen[1]['x-anyray-test'], undefined);
+
+  // And it must not pay that 502 again for the rest of the run.
+  await call(cfg, { messages: [{ role: 'user', content: 'hi' }] }, { optimize: 'on', fetchImpl });
+  assert.equal(calls, 3, 'asked for the decisions header again after it had already 502d');
+
+  // A failure that is NOT the oversized header still surfaces as an error
+  // rather than being swallowed by the retry. Asserted with a 400, which is
+  // non-retryable: a genuine 502 would be retried with backoff, which is the
+  // right behaviour for a real outage and a slow thing to wait out in a test.
+  resetDecisionsHeader();
+  const always400 = async () => ({ ok: false, status: 400, headers: { get: () => null }, text: async () => 'bad request' });
+  await assert.rejects(
+    call(cfg, { messages: [{ role: 'user', content: 'hi' }] }, { optimize: 'on', fetchImpl: always400 }),
+    /gateway 400/
+  );
+  resetDecisionsHeader();
+});
