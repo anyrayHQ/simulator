@@ -1,6 +1,6 @@
 {
-  "title": "An agent that re-ran the same command, with a retrieval-capable client",
-  "note": "The shape the eliding strategies are built for. The anyray_retrieve tool is what proves this client can fetch an elided span back; without it the gateway stands those strategies down on purpose, and the honest result is 0%.",
+  "title": "A retrieval-capable agent re-reading the same command",
+  "note": "The shape the eliding strategies are built for. The anyray_retrieve tool is what proves this client can fetch an elided span back; without it the gateway stands those strategies down on purpose, and the honest result is 0%. It deliberately does NOT declare anyray_retrieve: this harness sends one request and cannot answer a tool call, so claiming retrieval it cannot honour makes the optimizer elide spans nothing will fetch back. The saving here is therefore what a NON-retrieval client gets — a retrieval-capable agent sees more.",
   "mustInclude": [
     "ord_88412",
     "payments-api",
@@ -95,7 +95,7 @@
       },
       {
         "role": "user",
-        "content": "Based on those logs: which order failed, against which upstream service, and with what error? One sentence."
+        "content": "From the pod logs above, name the order id, the upstream service and the exact error code. One sentence, exact values only."
       }
     ],
     "tools": [
@@ -113,24 +113,6 @@
             },
             "required": [
               "command"
-            ]
-          }
-        }
-      },
-      {
-        "type": "function",
-        "function": {
-          "name": "anyray_retrieve",
-          "description": "Retrieve context the optimizer stashed, by handle.",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "handle": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "handle"
             ]
           }
         }

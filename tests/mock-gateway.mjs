@@ -26,13 +26,22 @@ const FACTS = {
 // Order matters: the agent-shaped workloads also contain ord_88412, so the
 // cheapest marker must not win. A mock that silently returns no facts for a
 // workload makes every run against it meaningless while looking like it worked.
+// Markers must be unique to ONE workload. `anyray_retrieve` used to identify
+// example-05 and then every workload declared it, so the mock answered as
+// example-05 for all five — each one silently graded against the wrong answer
+// key. Matched on the QUESTION text now, which is the one part of a workload
+// that is genuinely its own.
+const MARKERS = [
+  ['exact values only', 'example-05-agent-retrieval'],
+  ['Based on those logs', 'example-04-agent-reruns'],
+  ['tool from the catalogue', 'example-03-tool-bloat'],
+  ['HTTP status 504', 'example-02-small-question'],
+  ['last night', 'example-01-log-dump'],
+];
+
 function identify(body) {
   const text = JSON.stringify(body);
-  if (text.includes('anyray_retrieve')) return 'example-05-agent-retrieval';
-  if (text.includes('kubectl logs deploy/checkout')) return 'example-04-agent-reruns';
-  if (text.includes('tool from the catalogue')) return 'example-03-tool-bloat';
-  if (text.includes('HTTP status 504')) return 'example-02-small-question';
-  if (text.includes('ord_88412')) return 'example-01-log-dump';
+  for (const [marker, id] of MARKERS) if (text.includes(marker)) return id;
   return 'unknown';
 }
 

@@ -1,6 +1,6 @@
 {
   "title": "One question in front of a large tool catalogue",
-  "note": "The shape an MCP-connected agent sends every turn: eighteen tool schemas in front of one short question. Replace the tools with your own catalogue.",
+  "note": "The shape an MCP-connected agent sends every turn: a large tool catalogue in front of one short question. anyray_retrieve is in the catalogue because a real Anyray-routed client has it. It deliberately does NOT declare anyray_retrieve: this harness sends one request and cannot answer a tool call, so claiming retrieval it cannot honour makes the optimizer elide spans nothing will fetch back. The saving here is therefore what a NON-retrieval client gets — a retrieval-capable agent sees more.",
   "mustInclude": [
     "search_logs",
     "payments-api"
@@ -570,7 +570,7 @@
     "messages": [
       {
         "role": "user",
-        "content": "The payments-api service is throwing 5xx errors. Name the single tool from the catalogue you would call first to find the cause, and say which service you would point it at. Do not call it \u2014 just name it."
+        "content": "The payments-api service is throwing 5xx errors. Name the single tool from the catalogue you would call first to find the cause, and say which service you would point it at. Do not call it — just name it."
       }
     ]
   }

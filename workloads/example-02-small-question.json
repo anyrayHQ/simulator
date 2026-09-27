@@ -1,7 +1,10 @@
 {
   "title": "A short question with nothing to trim",
-  "note": "This one is here on purpose. There is nothing in it worth removing, so the honest result is 0% saved — and you should see that in your own report before you believe any of the other numbers.",
-  "mustInclude": ["504", "gateway"],
+  "note": "Here on purpose: there is nothing worth removing, so the honest result is 0% saved. It deliberately does NOT declare anyray_retrieve: this harness sends one request and cannot answer a tool call, so claiming retrieval it cannot honour makes the optimizer elide spans nothing will fetch back. The saving here is therefore what a NON-retrieval client gets — a retrieval-capable agent sees more.",
+  "mustInclude": [
+    "504",
+    "gateway"
+  ],
   "body": {
     "temperature": 0,
     "messages": [
