@@ -112,6 +112,22 @@ One of the shipped examples saves nothing at all. That's deliberate: a short
 question has nothing worth removing, and you should see an honest 0% before you
 believe any of the other numbers.
 
+## And it has to be able to fail
+
+Pointed at a gateway that drops a required fact:
+
+```
+example-01-log-dump           9,036 →  2,892   68%  LOST FACTS (2/3 vs 3/3)
+  ! only missing after the trim: ECONNRESET
+```
+
+Note it still reports the cost win alongside. **Cheaper and worse is a real
+outcome and the tool says so**, and the run exits non-zero so CI can gate on it.
+A proof tool that cannot return a bad verdict is marketing, and an evaluator
+spots that in the first five minutes. The failure path is tested rather than
+asserted — `npm test` runs the whole thing against a mock gateway in both
+states.
+
 ## How the two numbers are made
 
 <details>
@@ -280,6 +296,19 @@ this tool does **not** protect you from.
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
 | `workloads/` | Four worked examples. Yours land here, gitignored — and once any of yours exist, the examples are skipped (`--examples` forces them back). |
+
+## The other half of the evidence
+
+| | What it is | Whose numbers |
+| --- | --- | --- |
+| [`anyrayHQ/benchmarks`](https://github.com/anyrayHQ/benchmarks) | 40 synthetic workloads plus 8 public corpora, run against the optimizer with its results **committed** | ours, and anyone reproduces them |
+| this repo | your prompts, your gateway, your provider's `usage` field | **yours alone**, and never committed |
+
+The value proposition is inverted on purpose. Benchmarks is credible *because*
+its results are in the tree and you can re-run them and get the same figures.
+This is credible *because* the figures are yours and we never see them. Want
+numbers you can check against ours? Go there. Want numbers from your own
+traffic? You are in the right place.
 
 ## Troubleshooting
 
