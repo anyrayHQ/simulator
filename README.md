@@ -276,6 +276,15 @@ single turn, so all of its thinking belongs to the current turn and there is
 nothing the trim may remove. A session with follow-ups counts as solved only if
 every prompt in it was answered.
 
+The provider's prompt cache decides most of a session's bill, so test both
+sides of it. Prompts sent back to back keep the cache warm: a rewrite of an
+earlier block then costs a cache write (about 12x a read), and it pays off only
+if it stays the same on every later turn. `--pause <seconds>` waits between
+prompts. Past the 5-minute cache lifetime the whole transcript is billed again
+at full price, which is where trimming it earns most. Each session also records
+`cacheWriteByTurn`: after the first turn a stable prefix writes only what is
+new, so large repeated writes mean a strategy is churning the cache.
+
 Two tasks are built in. `--task incident` (the default) has the agent read its
 way to a root cause, touching most files once. `--task watch` has it re-run the
 same log command on a live clock until a fix lands, so each observation mostly
