@@ -132,8 +132,20 @@ test('runSession with follow-ups: each answer brings the next prompt, thinking s
   assert.equal(sent[2].messages.filter((m) => m.content.some((b) => b.type === 'thinking')).length, 2);
   // The last answer never names max_idle_conns: solved only if every prompt was.
   assert.deepEqual(s.segments, [true, true, false]);
+  assert.deepEqual(s.cacheWriteByTurn, [0, 0, 0]);
   assert.equal(s.solved, false);
   assert.deepEqual(s.missing, ['max_idle_conns']);
+});
+
+test('runSession with a pause waits before each follow-up, not before the first prompt', async () => {
+  const t0 = Date.now();
+  const at = [];
+  await runSession({
+    send: async () => (at.push(Date.now() - t0), { content: [{ type: 'text', text: 'x' }], stop_reason: 'end_turn', usage: {} }),
+    files: buildWorld(7), stamp: 't', followups: 1, pauseMs: 60, cache: false,
+  });
+  assert.ok(at[0] < 50);
+  assert.ok(at[1] - at[0] >= 55);
 });
 
 test('runSession with follow-ups: a prompt the session never reached counts as missed', async () => {

@@ -35,6 +35,10 @@
 //   node session.mjs --followups 3    # after each answer, ask another question on the
 //                                     # same transcript: a multi-prompt session, so
 //                                     # earlier turns (and their thinking) become past
+//   node session.mjs --followups 3 --pause 330
+//                                     # a pause between prompts; past the provider's
+//                                     # 5-minute cache TTL the transcript is billed
+//                                     # again in full, as for a person who stepped away
 //   node session.mjs --arms direct,control,anyray:cache_optimizer,anyray:none
 //                                     # one arm per experiment; what each runs is
 //                                     # set by an optimizer rule matching
@@ -72,9 +76,11 @@ function parseArgs(argv) {
     else if (f === '--task') a.task = argv[++i];
     else if (f === '--thinking') a.thinking = parseThinking(argv[++i]);
     else if (f === '--followups') a.followups = Number(argv[++i]);
+    else if (f === '--pause') a.pause = Number(argv[++i]);
     else throw new Error(`unknown flag ${f}`);
   }
   if (!Number.isInteger(a.rounds) || a.rounds < 1) throw new Error('--rounds must be a positive integer');
+  if (a.pause != null && !(a.pause >= 0)) throw new Error('--pause takes seconds');
   if (a.followups != null && !(Number.isInteger(a.followups) && a.followups >= 0)) throw new Error('--followups must be a whole number');
   return a;
 }
@@ -163,7 +169,7 @@ async function main() {
     `Session mode: ${args.rounds} round(s) x ${arms.length} arms (${arms.join(', ')}) as ${cfg.model}, up to ${maxTurns} turns each.\n` +
       `Cache markers: ${args.cache ? 'on, placed like Claude Code' : 'off (plain SDK loop)'}. ` +
       `Thinking: ${!args.thinking ? 'off' : typeof args.thinking === 'number' ? `${args.thinking} token budget` : `adaptive${args.thinking.effort ? `, ${args.thinking.effort} effort` : ''}`}. ` +
-      `Prompts per session: ${1 + (args.followups ?? 0)}. ` +
+      `Prompts per session: ${1 + (args.followups ?? 0)}${args.pause ? `, ${args.pause}s apart` : ''}. ` +
       `Retrieval tools on the anyray arm: ${retrieval ? retrieval.tools.map((t) => t.name).join(', ') : 'none'}.\n` +
       `${args.rounds * arms.length} sessions, billed to you${rate ? '' : ' (no published rate for this model, so tokens only)'}. ` +
       `Each round prints its cost and is saved as it finishes, so Ctrl-C loses nothing already paid for.\n`
@@ -185,6 +191,7 @@ async function main() {
             cache: args.cache,
             thinking: args.thinking ?? 0,
             followups: args.followups ?? 0,
+            pauseMs: (args.pause ?? 0) * 1000,
             extraTools: arm.startsWith('anyray') && retrieval ? retrieval.tools : [],
             callExtra: retrieval?.call,
           });
@@ -202,7 +209,7 @@ async function main() {
       return `${arm}: ${s.cost != null ? fmtUSD(s.cost) : s.usage.billedInput.toLocaleString() + ' tok'} ${s.turns}t ${s.solved ? 'solved' : `NOT solved (missing ${s.missing.join(', ')})`}`;
     });
     console.log(`round ${r}  ${cells.join('   ')}`);
-    writeFileSync(args.out, JSON.stringify({ runId, model: cfg.model, arms, cache: args.cache, thinking: args.thinking ?? 0, followups: args.followups ?? 0, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, task: scenario?.name ?? 'incident', required: scenario?.required ?? REQUIRED, rounds }, null, 2));
+    writeFileSync(args.out, JSON.stringify({ runId, model: cfg.model, arms, cache: args.cache, thinking: args.thinking ?? 0, followups: args.followups ?? 0, pause: args.pause ?? 0, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, task: scenario?.name ?? 'incident', required: scenario?.required ?? REQUIRED, rounds }, null, 2));
   }
 
   // ---------- summary ----------
