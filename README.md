@@ -268,6 +268,13 @@ per experiment. Each `anyray:<name>` arm tags its requests with
 gateway (`when.metadata.experiment`) can decide what that arm runs, for example
 one strategy on its own, without changing anyone else's traffic.
 
+Two tasks are built in. `--task incident` (the default) has the agent read its
+way to a root cause, touching most files once. `--task watch` has it re-run the
+same log command on a live clock until a fix lands, so each observation mostly
+repeats the last one. That repetition is the shape that dominates real
+coding-agent traffic, and it is what the dedupe and back-reference strategies
+target. On the incident task they have almost nothing to act on.
+
 A cheaper arm that solves fewer tasks is reported as **WORSE**, never as a
 saving. In testing, one strategy removed every tool but `finish`, came out 92%
 "cheaper", and solved 0 of 10.

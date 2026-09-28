@@ -24,6 +24,8 @@
 //   node session.mjs --no-cache       # a harness that sets no cache markers (plain SDK loop)
 //   node session.mjs --no-retrieval   # anyray arm without the /mcp tools
 //   node session.mjs --small          # ~5x smaller repository: fast, cheap screening runs
+//   node session.mjs --task watch     # re-run the same log command until a fix lands:
+//                                     # repeated, overlapping observations
 //   node session.mjs --arms direct,control,anyray:cache_optimizer,anyray:none
 //                                     # one arm per experiment; what each runs is
 //                                     # set by an optimizer rule matching
@@ -33,6 +35,7 @@ import { writeFileSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
 import { loadRates, costOf, fmtUSD, rateFor } from './lib/rates.mjs';
 import { buildWorld, REQUIRED } from './lib/world.mjs';
+import { watchScenario } from './lib/watch.mjs';
 import { runSession, gatewaySender, directSender, retrievalTools } from './lib/agent.mjs';
 import { newRunId } from './lib/workloads.mjs';
 
@@ -48,6 +51,7 @@ function parseArgs(argv) {
     else if (f === '--no-cache') a.cache = false;
     else if (f === '--no-retrieval') a.retrieval = false;
     else if (f === '--small') a.small = true;
+    else if (f === '--task') a.task = argv[++i];
     else throw new Error(`unknown flag ${f}`);
   }
   if (!Number.isInteger(a.rounds) || a.rounds < 1) throw new Error('--rounds must be a positive integer');
@@ -130,6 +134,8 @@ async function main() {
   };
 
   const files = buildWorld(args.seed, { small: args.small });
+  if (args.task && args.task !== 'incident' && args.task !== 'watch') throw new Error(`unknown --task ${args.task} (incident | watch)`);
+  const scenario = args.task === 'watch' ? watchScenario(args.seed) : null;
   const runId = newRunId();
   const rate = rateFor(rates, cfg.model);
   console.log(
@@ -150,6 +156,7 @@ async function main() {
           const s = await runSession({
             send: senderFor(arm),
             files,
+            scenario,
             stamp: `${runId}-${r}-${arm}`,
             maxTurns,
             cache: args.cache,
@@ -170,7 +177,7 @@ async function main() {
       return `${arm}: ${s.cost != null ? fmtUSD(s.cost) : s.usage.billedInput.toLocaleString() + ' tok'} ${s.turns}t ${s.solved ? 'solved' : `NOT solved (missing ${s.missing.join(', ')})`}`;
     });
     console.log(`round ${r}  ${cells.join('   ')}`);
-    writeFileSync(args.out, JSON.stringify({ runId, model: cfg.model, arms, cache: args.cache, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, required: REQUIRED, rounds }, null, 2));
+    writeFileSync(args.out, JSON.stringify({ runId, model: cfg.model, arms, cache: args.cache, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, task: scenario?.name ?? 'incident', required: scenario?.required ?? REQUIRED, rounds }, null, 2));
   }
 
   // ---------- summary ----------
