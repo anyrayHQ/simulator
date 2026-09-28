@@ -131,3 +131,42 @@ test('verdict: a cheaper arm that solves fewer tasks is reported as worse, not c
   assert.equal(verdict(c, null, { n: 4, solved: 0, baselineSolved: 4 }), 'WORSE: solved 0/4 vs 4/4 baseline');
   assert.equal(verdict(c, null, { n: 4, solved: 4, baselineSolved: 4 }), 'cheaper, beyond noise');
 });
+
+test('watch scenario: the clock moves per log call, windows overlap, and the fix shows up only later', async () => {
+  const { watchScenario } = await import('../lib/watch.mjs');
+  const sc = watchScenario(7);
+  assert.deepEqual(watchScenario(7).required, sc.required);
+  const run = sc.runner();
+  const first = run('kubectl_logs', { pod: 'checkout-2' });
+  const second = run('kubectl_logs', { pod: 'checkout-2' });
+  assert.match(first, /ECONNRESET/);
+  // Mostly the same lines again: the repeated observation the dedupe strategies target.
+  const a = new Set(first.split('\n'));
+  const overlap = second.split('\n').filter((l) => a.has(l)).length / a.size;
+  assert.ok(overlap > 0.8, `overlap ${overlap}`);
+  let later = '';
+  for (let i = 0; i < 12; i++) later = run('kubectl_logs', { pod: '2', tail: 60 });
+  assert.doesNotMatch(later, /ECONNRESET/, 'after the fix, the recent window is clean');
+  // A fresh session starts its own clock.
+  assert.equal(sc.runner()('kubectl_logs', { pod: 'checkout-2' }), first);
+  assert.match(run('read', { path: 'deploy/CHANGELOG.md' }), /#4415/);
+});
+
+test('runSession uses a scenario\'s own task, tools and grader', async () => {
+  const { watchScenario } = await import('../lib/watch.mjs');
+  const sc = watchScenario(7);
+  const sent = [];
+  const s = await runSession({
+    scenario: sc, stamp: 't',
+    send: async (body) => {
+      sent.push(body);
+      return sent.length === 1
+        ? { content: [{ type: 'tool_use', id: '1', name: 'kubectl_logs', input: { pod: 'checkout-2' } }], usage: {} }
+        : { content: [{ type: 'tool_use', id: '2', name: 'finish', input: { answer: `stopped; last ${sc.required[0]}; fix #4415` } }], usage: {} };
+    },
+  });
+  assert.deepEqual(sent[0].tools.map((t) => t.name), ['kubectl_logs', 'read', 'finish']);
+  assert.match(sent[0].messages[0].content[0].text, /fix is rolling out/);
+  assert.match(sent[1].messages[2].content[0].content, /ECONNRESET/);
+  assert.equal(s.solved, true);
+});
