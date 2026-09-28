@@ -29,6 +29,9 @@
 //   node session.mjs --thinking 2048 # extended thinking; each turn's thinking is
 //                                     # resent with the transcript, which is what
 //                                     # thinking_replay_trim acts on
+//   node session.mjs --thinking adaptive:high
+//                                     # adaptive thinking (Sonnet 5 and newer accept
+//                                     # only this), with an optional effort
 //   node session.mjs --followups 3    # after each answer, ask another question on the
 //                                     # same transcript: a multi-prompt session, so
 //                                     # earlier turns (and their thinking) become past
@@ -45,6 +48,15 @@ import { watchScenario } from './lib/watch.mjs';
 import { runSession, gatewaySender, directSender, retrievalTools } from './lib/agent.mjs';
 import { newRunId } from './lib/workloads.mjs';
 
+/** `2048` (a budget), `adaptive`, or `adaptive:<effort>`. */
+export function parseThinking(v) {
+  const m = /^adaptive(?::(low|medium|high|max))?$/.exec(String(v));
+  if (m) return { effort: m[1] ?? null };
+  const n = Number(v);
+  if (!(Number.isInteger(n) && n >= 1024)) throw new Error('--thinking takes a token budget of at least 1024, adaptive, or adaptive:<low|medium|high|max>');
+  return n;
+}
+
 function parseArgs(argv) {
   const a = { rounds: 3, cache: true, retrieval: true, out: 'session-results.json', seed: 7 };
   for (let i = 0; i < argv.length; i++) {
@@ -58,13 +70,12 @@ function parseArgs(argv) {
     else if (f === '--no-retrieval') a.retrieval = false;
     else if (f === '--small') a.small = true;
     else if (f === '--task') a.task = argv[++i];
-    else if (f === '--thinking') a.thinking = Number(argv[++i]);
+    else if (f === '--thinking') a.thinking = parseThinking(argv[++i]);
     else if (f === '--followups') a.followups = Number(argv[++i]);
     else throw new Error(`unknown flag ${f}`);
   }
   if (!Number.isInteger(a.rounds) || a.rounds < 1) throw new Error('--rounds must be a positive integer');
   if (a.followups != null && !(Number.isInteger(a.followups) && a.followups >= 0)) throw new Error('--followups must be a whole number');
-  if (a.thinking != null && !(Number.isInteger(a.thinking) && a.thinking >= 1024)) throw new Error('--thinking must be a token budget of at least 1024');
   return a;
 }
 
@@ -151,7 +162,7 @@ async function main() {
   console.log(
     `Session mode: ${args.rounds} round(s) x ${arms.length} arms (${arms.join(', ')}) as ${cfg.model}, up to ${maxTurns} turns each.\n` +
       `Cache markers: ${args.cache ? 'on, placed like Claude Code' : 'off (plain SDK loop)'}. ` +
-      `Thinking: ${args.thinking ? `${args.thinking} token budget` : 'off'}. ` +
+      `Thinking: ${!args.thinking ? 'off' : typeof args.thinking === 'number' ? `${args.thinking} token budget` : `adaptive${args.thinking.effort ? `, ${args.thinking.effort} effort` : ''}`}. ` +
       `Prompts per session: ${1 + (args.followups ?? 0)}. ` +
       `Retrieval tools on the anyray arm: ${retrieval ? retrieval.tools.map((t) => t.name).join(', ') : 'none'}.\n` +
       `${args.rounds * arms.length} sessions, billed to you${rate ? '' : ' (no published rate for this model, so tokens only)'}. ` +
