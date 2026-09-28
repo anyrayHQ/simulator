@@ -268,6 +268,14 @@ per experiment. Each `anyray:<name>` arm tags its requests with
 gateway (`when.metadata.experiment`) can decide what that arm runs, for example
 one strategy on its own, without changing anyone else's traffic.
 
+`--thinking <budget>` turns on extended thinking, and `--followups <n>` asks up
+to n more questions (3 on the incident task, 2 on watch) on the same
+transcript, one after each answer, as a person does in one long session. Use
+them together to test thinking replay trim. A session with one prompt is a
+single turn, so all of its thinking belongs to the current turn and there is
+nothing the trim may remove. A session with follow-ups counts as solved only if
+every prompt in it was answered.
+
 Two tasks are built in. `--task incident` (the default) has the agent read its
 way to a root cause, touching most files once. `--task watch` has it re-run the
 same log command on a live clock until a fix lands, so each observation mostly

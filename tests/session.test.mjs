@@ -46,6 +46,16 @@ test('buildRequest places cache breakpoints like a harness: system, last tool, n
   assert.equal(JSON.stringify(plain).includes('cache_control'), false);
 });
 
+test('buildRequest with thinking: enables it and keeps the answer budget on top of it', () => {
+  const msgs = [{ role: 'user', content: [{ type: 'text', text: 'q' }] }];
+  const body = buildRequest({ system: 's', tools: [{ name: 'a' }], maxTokens: 4096, cache: false, thinking: 2048, messages: msgs });
+  assert.deepEqual(body.thinking, { type: 'enabled', budget_tokens: 2048 });
+  assert.equal(body.max_tokens, 6144);
+  const off = buildRequest({ system: 's', tools: [{ name: 'a' }], maxTokens: 4096, cache: false, messages: msgs });
+  assert.equal('thinking' in off, false);
+  assert.equal(off.max_tokens, 4096);
+});
+
 test('runSession: tools run, turns are counted, finish ends it, extra tools route out', async () => {
   const script = [
     { content: [{ type: 'tool_use', id: '1', name: 'grep', input: { pattern: 'ECONNRESET' } }], usage: { input_tokens: 100, cache_creation_input_tokens: 50, output_tokens: 10 } },
@@ -80,6 +90,42 @@ test('runSession: a turn without a tool call ends the session with its text as t
   });
   assert.equal(s.turns, 1);
   assert.equal(s.stop, 'no_tool_call');
+  assert.equal(s.solved, false);
+});
+
+test('runSession with follow-ups: each answer brings the next prompt, thinking stays in the transcript, every answer is graded', async () => {
+  const think = { type: 'thinking', thinking: 'reasoning', signature: 'sig' };
+  const script = [
+    { content: [think, { type: 'tool_use', id: '1', name: 'finish', input: { answer: 'payments-api ECONNRESET keepalive_idle_ms #4411' } }], usage: {} },
+    // Answered in text, not via finish: still ends the segment.
+    { content: [think, { type: 'text', text: 'checkout-2; it was 30,000 ms' }], stop_reason: 'end_turn', usage: {} },
+    { content: [think, { type: 'tool_use', id: '2', name: 'finish', input: { answer: 'payments-api closes at 60s' } }], usage: {} },
+  ];
+  const sent = [];
+  const s = await runSession({
+    send: async (body) => (sent.push(body), script[sent.length - 1]),
+    files: buildWorld(7), stamp: 't', followups: 2, cache: false,
+  });
+  assert.equal(s.turns, 3);
+  assert.equal(s.stop, 'finish');
+  // The first follow-up rides with the finish result; the second is its own message.
+  assert.deepEqual(sent[1].messages.at(-1).content.map((b) => b.type), ['tool_result', 'text']);
+  assert.deepEqual(sent[2].messages.at(-1).content.map((b) => b.type), ['text']);
+  assert.equal(sent[2].messages.filter((m) => m.content.some((b) => b.type === 'thinking')).length, 2);
+  // The last answer never names max_idle_conns: solved only if every prompt was.
+  assert.deepEqual(s.segments, [true, true, false]);
+  assert.equal(s.solved, false);
+  assert.deepEqual(s.missing, ['max_idle_conns']);
+});
+
+test('runSession with follow-ups: a prompt the session never reached counts as missed', async () => {
+  const s = await runSession({
+    // This answer would also pass the follow-up; it must not be graded twice.
+    send: async () => ({ content: [{ type: 'tool_use', id: '1', name: 'finish', input: { answer: 'payments-api ECONNRESET keepalive_idle_ms 4411 checkout-2 30000' } }], usage: {} }),
+    files: buildWorld(7), stamp: 't', followups: 1, maxTurns: 1,
+  });
+  assert.equal(s.stop, 'max_turns');
+  assert.deepEqual(s.segments, [true, false]);
   assert.equal(s.solved, false);
 });
 
