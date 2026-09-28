@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildWorld, runTool, grade, REQUIRED } from '../lib/world.mjs';
 import { runSession, buildRequest } from '../lib/agent.mjs';
-import { compare, verdict } from '../session.mjs';
+import { compare, verdict, parseThinking } from '../session.mjs';
 
 test('world: the same seed gives byte-identical files, and the answer is findable', () => {
   assert.deepEqual(buildWorld(7), buildWorld(7));
@@ -91,6 +91,24 @@ test('runSession: a turn without a tool call ends the session with its text as t
   assert.equal(s.turns, 1);
   assert.equal(s.stop, 'no_tool_call');
   assert.equal(s.solved, false);
+});
+
+test('buildRequest with adaptive thinking: no budget, effort in output_config, room for thinking', () => {
+  const msgs = [{ role: 'user', content: [{ type: 'text', text: 'q' }] }];
+  const body = buildRequest({ system: 's', tools: [{ name: 'a' }], maxTokens: 4096, cache: false, thinking: { effort: 'high' }, messages: msgs });
+  assert.deepEqual(body.thinking, { type: 'adaptive' });
+  assert.deepEqual(body.output_config, { effort: 'high' });
+  assert.ok(body.max_tokens > 4096);
+  const plain = buildRequest({ system: 's', tools: [{ name: 'a' }], maxTokens: 4096, cache: false, thinking: { effort: null }, messages: msgs });
+  assert.equal('output_config' in plain, false);
+});
+
+test('parseThinking: a budget, adaptive, or adaptive with an effort', () => {
+  assert.equal(parseThinking('2048'), 2048);
+  assert.deepEqual(parseThinking('adaptive'), { effort: null });
+  assert.deepEqual(parseThinking('adaptive:high'), { effort: 'high' });
+  assert.throws(() => parseThinking('512'));
+  assert.throws(() => parseThinking('adaptive:huge'));
 });
 
 test('runSession with follow-ups: each answer brings the next prompt, thinking stays in the transcript, every answer is graded', async () => {
