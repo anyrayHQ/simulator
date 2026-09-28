@@ -12,7 +12,7 @@
 
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { loadEnv, resolveConfig } from './lib/env.mjs';
-import { loadWorkloads, stampRunId, newRunId } from './lib/workloads.mjs';
+import { loadWorkloads, stampRunId, newRunId, omitParams } from './lib/workloads.mjs';
 import { callGateway, callDirect } from './lib/gateway.mjs';
 import { normalizeUsage } from './lib/usage.mjs';
 import { loadRates } from './lib/rates.mjs';
@@ -226,7 +226,8 @@ async function main() {
   // already-paid workloads are not part of the bill, and including them would
   // over-quote by exactly the amount the resume just saved.
   const todo = workloads.filter((w) => !done.has(w.id));
-  const calls = todo.length * cfg.repeats * 2;
+  const arms = cfg.direct ? 3 : 2;
+  const calls = todo.length * cfg.repeats * arms;
   // A call count is not a number anyone can say yes or no to. Estimate from the
   // workloads themselves — chars/4, rough, and deliberately rough UPWARDS by
   // assuming no saving at all. Better to over-quote than to surprise someone.
@@ -235,15 +236,15 @@ async function main() {
     rates,
     cfg.model,
     {
-      uncachedInput: estInputTokens * cfg.repeats * 2,
+      uncachedInput: estInputTokens * cfg.repeats * arms,
       cacheWrite: 0,
       cacheRead: 0,
-      output: todo.length * cfg.repeats * 2 * cfg.maxTokens,
+      output: todo.length * cfg.repeats * arms * cfg.maxTokens,
     },
     { includeOutput: true }
   );
   console.log(
-    `${todo.length} workload(s) x ${cfg.repeats} run(s) x 2 arms = ${calls} calls to ${cfg.gatewayUrl} as ${cfg.model}.\n` +
+    `${todo.length} workload(s) x ${cfg.repeats} run(s) x ${arms} arms = ${calls} calls to ${cfg.gatewayUrl}${cfg.direct ? ` and ${cfg.direct.providerUrl}` : ''} as ${cfg.model}.\n` +
       (est != null
         ? `Rough ceiling at list price: ${fmtUSD(est)} — assumes no saving and every answer running to PROOF_MAX_TOKENS, so the real bill should come in under it. Billed to you, not to us.\n`
         : `No published rate for ${cfg.model}, so this cannot estimate the spend. Billed to you, not to us.\n`)
@@ -261,7 +262,8 @@ async function main() {
     if (showProgress) {
       process.stdout.write(`  … ${rawWl.id} (${index}/${workloads.length})\r`);
     }
-    const wl = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
+    const stamped = args.noCacheIsolation ? rawWl : stampRunId(rawWl, runId);
+    const wl = omitParams(stamped, cfg.omitParams);
     const bypassedRuns = [];
     const optimizedRuns = [];
     const directRuns = [];
