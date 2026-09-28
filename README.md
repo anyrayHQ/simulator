@@ -226,6 +226,55 @@ key. That key is a separate variable on purpose: on a machine enrolled with
 Anyray, `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are part of the routing, so
 borrowing one would quietly make the "direct" arm a second gateway arm.
 
+## Session mode: what a real harness sees
+
+`prove.mjs` sends one request twice. A real agent doesn't work that way. It
+resends a growing transcript every turn, reads most of it from the provider's
+prompt cache at a fraction of the price, and decides for itself how many turns
+to take. A trim that saves tokens on one request can break that cache, or send
+the agent back for what was removed, so the **session** costs more even though
+each request got cheaper. Per-request results don't show that. Session mode does.
+
+```bash
+node session.mjs              # 3 rounds; use --rounds 6 or more before concluding anything
+```
+
+An agent with coding-agent tools (`glob`, `read`, `grep`, `finish`) investigates a
+production incident in a generated repository: about 110k tokens of pod logs, a
+config, a deploy history, and a loud harmless error as a red herring. It runs
+until it calls `finish`. The repository is generated from a seed, so every arm
+sees the same files. Each round runs these arms at the same time:
+
+| Arm | What it is |
+| --- | --- |
+| `direct` | Straight to your provider (needs `DIRECT_BASE_URL`) |
+| `control` | `direct` again. **The noise floor:** two identical arms still differ, because the agent takes a different path each time |
+| `anyray` | Through the gateway, optimizing, with Anyray's `anyray_retrieve` and `anyray_recall` registered as an enrolled client has them |
+
+Requests use the Anthropic Messages format, with cache breakpoints placed where
+Claude Code places them (`--no-cache` for a plain SDK loop). No `temperature` is
+pinned. Cost is the real bill: uncached input, cache writes, cache reads and
+output, each at its own rate. For every round it reports cost, turns and whether
+the task was solved. The Anyray-to-direct cost ratio counts as a result only if
+Anyray is cheaper in more than 70% of rounds **and** its upper-quartile ratio is
+below 1. A result that falls inside the control arm's spread is reported as
+noise.
+
+Useful flags: `--small` builds a repository about 5x smaller, so each session
+costs cents and a screening run takes minutes. `--no-cache` sends no cache
+markers, like a plain SDK loop. `--arms direct,control,anyray:<name>` runs one arm
+per experiment. Each `anyray:<name>` arm tags its requests with
+`experiment: <name>` in `x-anyray-metadata`, so an optimizer rule on your
+gateway (`when.metadata.experiment`) can decide what that arm runs, for example
+one strategy on its own, without changing anyone else's traffic.
+
+A cheaper arm that solves fewer tasks is reported as **WORSE**, never as a
+saving. In testing, one strategy removed every tool but `finish`, came out 92%
+"cheaper", and solved 0 of 10.
+
+It also has to be able to fail, and it will. Sessions vary a lot: in our first
+round, two identical direct sessions differed by 37%.
+
 ## Does it work on models other than Claude?
 
 Yes. Nothing in the measurement is Claude-specific — it reads whichever dialect
@@ -273,7 +322,7 @@ the MCP tools registered is retrieval-capable and sees more than this.
 | What does that save me in dollars? | **Yes** — at published list rates |
 | Do the answers still contain what I need? | **Yes** — facts I declared, checked every run |
 | Would a human prefer the unoptimized answer? | **Indicative** — blind grading, small sample |
-| Does my whole agent session get cheaper? | **No** — use the gateway's audited holdout |
+| Does my whole agent session get cheaper? | **Indicative** — `session.mjs`, on a fixed task, against a measured noise floor. Your own traffic over weeks: the gateway's audited holdout |
 
 ## Your prompts stay yours
 
@@ -312,6 +361,7 @@ this tool does **not** protect you from.
 | `SETUP-PROMPT.md` | Paste into your coding agent. It captures your workloads. |
 | `prove.mjs` | Both arms, both verdicts. The one command. |
 | `judge.mjs` | Optional blind grading. |
+| `session.mjs` | Session mode: whole agent sessions, direct vs control vs Anyray. |
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
 | `workloads/` | Four worked examples. Yours land here, gitignored — and once any of yours exist, the examples are skipped (`--examples` forces them back). |
