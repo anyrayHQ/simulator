@@ -17,6 +17,7 @@ report.html
 report-shareable.html
 judge.json
 session-*.json
+runs/
 
 # macOS
 .DS_Store

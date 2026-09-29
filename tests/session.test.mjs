@@ -181,7 +181,7 @@ test('an experiment arm tags its requests so an optimizer rule can match them', 
   } finally {
     globalThis.fetch = realFetch;
   }
-  assert.deepEqual(JSON.parse(seen[0]['x-anyray-metadata']), { tool: 'anyray-simulator-session', experiment: 'cache_optimizer' });
+  assert.deepEqual(JSON.parse(seen[0]['x-anyray-metadata']), { tool: 'anyray-simulator-cc-cache_optimizer', experiment: 'cache_optimizer' });
   assert.deepEqual(JSON.parse(seen[1]['x-anyray-metadata']), { tool: 'anyray-simulator-session' });
   assert.equal(seen[2]['x-anyray-optimize'], 'off');
 });
