@@ -24,6 +24,7 @@
 //   node session.mjs --no-cache       # a harness that sets no cache markers (plain SDK loop)
 //   node session.mjs --no-retrieval   # anyray arm without the /mcp tools
 //   node session.mjs --small          # ~5x smaller repository: fast, cheap screening runs
+//   node session.mjs --task salt-docs # document a pinned real Salt checkout
 //   node session.mjs --task watch     # re-run the same log command until a fix lands:
 //                                     # repeated, overlapping observations
 //   node session.mjs --thinking 2048 # extended thinking; each turn's thinking is
@@ -49,6 +50,7 @@ import { loadEnv, resolveConfig } from './lib/env.mjs';
 import { loadRates, costOf, fmtUSD, rateFor } from './lib/rates.mjs';
 import { buildWorld, REQUIRED } from './lib/world.mjs';
 import { watchScenario } from './lib/watch.mjs';
+import { saltScenario } from './lib/salt.mjs';
 import { runSession, gatewaySender, directSender, retrievalTools } from './lib/agent.mjs';
 import { newRunId } from './lib/workloads.mjs';
 
@@ -160,9 +162,9 @@ async function main() {
     throw new Error(`unknown arm ${arm}`);
   };
 
-  const files = buildWorld(args.seed, { small: args.small });
-  if (args.task && args.task !== 'incident' && args.task !== 'watch') throw new Error(`unknown --task ${args.task} (incident | watch)`);
-  const scenario = args.task === 'watch' ? watchScenario(args.seed) : null;
+  if (args.task && !['incident', 'watch', 'salt-docs'].includes(args.task)) throw new Error(`unknown --task ${args.task} (incident | watch | salt-docs)`);
+  const scenario = args.task === 'salt-docs' ? saltScenario() : args.task === 'watch' ? watchScenario(args.seed) : null;
+  const files = scenario?.files ?? buildWorld(args.seed, { small: args.small });
   const runId = newRunId();
   const rate = rateFor(rates, cfg.model);
   console.log(
@@ -189,6 +191,7 @@ async function main() {
             scenario,
             stamp: `${runId}-${r}-${arm}`,
             maxTurns,
+            ...(scenario?.maxTokens && { maxTokens: scenario.maxTokens }),
             cache: args.cache,
             thinking: args.thinking ?? 0,
             followups: args.followups ?? 0,
