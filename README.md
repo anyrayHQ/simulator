@@ -268,6 +268,14 @@ per experiment. Each `anyray:<name>` arm tags its requests with
 gateway (`when.metadata.experiment`) can decide what that arm runs, for example
 one strategy on its own, without changing anyone else's traffic.
 
+The gateway never tells a client which strategies acted on a request, so an
+`anyray:<name>` arm's claim to run one strategy alone is checked from the
+gateway's side. Each experiment arm sends as its own client tool
+(`anyray-simulator-cc-<name>`), and `node audit.mjs --since <ISO time>` (needs
+`ANYRAY_ADMIN_KEY`) reads the gateway's traces for those tools. Per arm, it
+reports how often the strategy acted, what it stood down for and why, and any
+other strategy that acted, which would break isolation.
+
 `--thinking <budget>` turns on extended thinking, and `--followups <n>` asks up
 to n more questions (3 on the incident task, 2 on watch) on the same
 transcript, one after each answer, as a person does in one long session. Use
@@ -386,6 +394,7 @@ this tool does **not** protect you from.
 | `prove.mjs` | Both arms, both verdicts. The one command. |
 | `judge.mjs` | Optional blind grading. |
 | `session.mjs` | Session mode: whole agent sessions, direct vs control vs Anyray. |
+| `audit.mjs` | Checks a session run's experiment arms against the gateway's traces: what acted, what stood down, whether each arm stayed isolated. |
 | `report.mjs` | Writes `report.html`. |
 | `rates.json` | Published list prices. Edit if your contract rate differs. |
 | `workloads/` | Four worked examples. Yours land here, gitignored — and once any of yours exist, the examples are skipped (`--examples` forces them back). |

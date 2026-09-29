@@ -175,6 +175,7 @@ async function main() {
       `Each round prints its cost and is saved as it finishes, so Ctrl-C loses nothing already paid for.\n`
   );
 
+  const startedAt = new Date().toISOString();
   const rounds = [];
   for (let r = 1; r <= args.rounds; r++) {
     // All arms of a round run at once, so time-of-day and provider load hit
@@ -209,7 +210,7 @@ async function main() {
       return `${arm}: ${s.cost != null ? fmtUSD(s.cost) : s.usage.billedInput.toLocaleString() + ' tok'} ${s.turns}t ${s.solved ? 'solved' : `NOT solved (missing ${s.missing.join(', ')})`}`;
     });
     console.log(`round ${r}  ${cells.join('   ')}`);
-    writeFileSync(args.out, JSON.stringify({ runId, model: cfg.model, arms, cache: args.cache, thinking: args.thinking ?? 0, followups: args.followups ?? 0, pause: args.pause ?? 0, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, task: scenario?.name ?? 'incident', required: scenario?.required ?? REQUIRED, rounds }, null, 2));
+    writeFileSync(args.out, JSON.stringify({ runId, startedAt, model: cfg.model, arms, cache: args.cache, thinking: args.thinking ?? 0, followups: args.followups ?? 0, pause: args.pause ?? 0, retrieval: Boolean(retrieval), seed: args.seed, small: Boolean(args.small), maxTurns, task: scenario?.name ?? 'incident', required: scenario?.required ?? REQUIRED, rounds }, null, 2));
   }
 
   // ---------- summary ----------
