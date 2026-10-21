@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/node-%E2%89%A520-3c873a" alt="Node 20+">
+  <img src="https://img.shields.io/badge/node-%E2%89%A522-3c873a" alt="Node 22+">
   <img src="https://img.shields.io/badge/dependencies-none-1a7f5a" alt="No dependencies">
   <img src="https://img.shields.io/badge/scope-per--request-8a5a00" alt="Per-request">
   <img src="https://img.shields.io/badge/your%20prompts-never%20committed-0e6a6a" alt="Prompts never committed">
@@ -81,7 +81,7 @@ node report.mjs --redact      # a copy you can send on: numbers, no content
 Interrupted partway through? Run the same command again and it picks up where
 it stopped, keeping the workloads you already paid for. `--fresh` starts over.
 
-Node 20+. No `npm install`, no dependencies, no account beyond the client key you
+Node 22+. No `npm install`, no dependencies, no account beyond the client key you
 already have.
 
 > **This spends your provider budget.** Each workload costs 2 × `PROOF_REPEATS`
